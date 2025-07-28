@@ -43,15 +43,26 @@ async function refreshTwitterToken() {
 }
 
 async function getValidTwitterToken() {
-    const tokenExpiry = parseInt(process.env.TWITTER_TOKEN_EXPIRES || '0');
-    const now = Date.now();
-    
-    // If token expires in less than 5 minutes, refresh it
-    if (now >= (tokenExpiry - 300000)) {
-        return await refreshTwitterToken();
+    // If we have a stored access token, use it directly
+    if (process.env.TWITTER_ACCESS_TOKEN && process.env.TWITTER_ACCESS_TOKEN !== 'undefined') {
+        return process.env.TWITTER_ACCESS_TOKEN;
     }
     
-    return process.env.TWITTER_ACCESS_TOKEN;
+    // If no stored token, try to refresh (only if we have refresh token)
+    if (process.env.TWITTER_REFRESH_TOKEN && process.env.TWITTER_REFRESH_TOKEN !== 'undefined') {
+        const tokenExpiry = parseInt(process.env.TWITTER_TOKEN_EXPIRES || '0');
+        const now = Date.now();
+        
+        // If token expires in less than 5 minutes, refresh it
+        if (now >= (tokenExpiry - 300000)) {
+            return await refreshTwitterToken();
+        }
+        
+        return process.env.TWITTER_ACCESS_TOKEN;
+    }
+    
+    // Fallback error
+    throw new Error('No valid Twitter tokens available. Please run setup.js locally first.');
 }
 
 // === TWITTER COIN DISCOVERY ===
