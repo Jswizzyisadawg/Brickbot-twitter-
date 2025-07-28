@@ -1,10 +1,58 @@
 // === INTERACTIVE BRICK BOT - ENHANCED VERSION ===
+// Now with OAuth 2.0 PKCE authentication for future-proof operation
 require('dotenv').config();
 const { TwitterApi } = require('twitter-api-v2');
 const cron = require('node-cron');
 const axios = require('axios');
 const winston = require('winston');
 const fs = require('fs').promises;
+
+// === OAUTH 2.0 TOKEN MANAGEMENT ===
+async function refreshTwitterToken() {
+    try {
+        console.log('🔄 Refreshing Twitter access token...');
+        
+        const response = await axios.post('https://api.twitter.com/2/oauth2/token',
+            new URLSearchParams({
+                grant_type: 'refresh_token',
+                refresh_token: process.env.TWITTER_REFRESH_TOKEN,
+                client_id: process.env.TWITTER_CLIENT_ID
+            }),
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Authorization': `Basic ${Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64')}`
+                }
+            }
+        );
+
+        const { access_token, refresh_token, expires_in } = response.data;
+        
+        // Update environment variables in memory
+        process.env.TWITTER_ACCESS_TOKEN = access_token;
+        if (refresh_token) process.env.TWITTER_REFRESH_TOKEN = refresh_token;
+        process.env.TWITTER_TOKEN_EXPIRES = Date.now() + (expires_in * 1000);
+        
+        console.log('✅ Twitter token refreshed successfully');
+        return access_token;
+        
+    } catch (error) {
+        console.error('❌ Failed to refresh Twitter token:', error.response?.data || error.message);
+        throw error;
+    }
+}
+
+async function getValidTwitterToken() {
+    const tokenExpiry = parseInt(process.env.TWITTER_TOKEN_EXPIRES || '0');
+    const now = Date.now();
+    
+    // If token expires in less than 5 minutes, refresh it
+    if (now >= (tokenExpiry - 300000)) {
+        return await refreshTwitterToken();
+    }
+    
+    return process.env.TWITTER_ACCESS_TOKEN;
+}
 
 // === TWITTER COIN DISCOVERY ===
 class TwitterCoinDiscovery {
@@ -696,15 +744,10 @@ class InteractiveBrickBot {
     this.memory = new ConversationMemory();
     this.cryptoTracker = new CryptoTracker();
     
-    this.twitter = new TwitterApi({
-      appKey: process.env.TWITTER_API_KEY,
-      appSecret: process.env.TWITTER_API_SECRET,
-      accessToken: process.env.TWITTER_ACCESS_TOKEN,
-      accessSecret: process.env.TWITTER_ACCESS_SECRET,
-    });
-
-    this.mentionMonitor = new MentionMonitor(this.twitter, this.personality, this.memory);
-    this.coinDiscovery = new TwitterCoinDiscovery(this.twitter);
+    // Initialize components (Twitter client will be set up in initialize method)
+    this.twitter = null; // Will be initialized in initializeTwitterClient
+    this.mentionMonitor = null;
+    this.coinDiscovery = null;
     this.randomMoments = new RandomBrickMoments();
     this.securityChecker = new CoinSecurityChecker();
     this.isRunning = false;
@@ -712,8 +755,26 @@ class InteractiveBrickBot {
     logger.info('🤖 Interactive Brick Bot - Crypto Intelligence Mode initialized');
   }
 
+  async initializeTwitterClient() {
+    try {
+      const accessToken = await getValidTwitterToken();
+      this.twitter = new TwitterApi(accessToken);
+      logger.info('🐦 Connected to Twitter with OAuth 2.0');
+    } catch (error) {
+      logger.error('❌ Failed to initialize Twitter client:', error.message);
+      throw error;
+    }
+  }
+
   async initialize() {
     try {
+      // Initialize Twitter client first
+      await this.initializeTwitterClient();
+      
+      // Now set up Twitter-dependent components
+      this.mentionMonitor = new MentionMonitor(this.twitter, this.personality, this.memory);
+      this.coinDiscovery = new TwitterCoinDiscovery(this.twitter);
+      
       const me = await this.twitter.v2.me();
       logger.info(`🐦 Connected to Twitter as: @${me.data.username}`);
       
