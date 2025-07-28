@@ -1,0 +1,40 @@
+{
+  "name": "brick-bot",
+  "version": "2.0.0",
+  "description": "Advanced AI-powered crypto forecasting bot with Ron Burgundy personality",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
+    "setup": "node setup.js",
+    "test-forecast": "node brick-forecaster.js",
+    "deploy": "railway up",
+    "logs": "railway logs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.3",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.21.2",
+    "natural": "^6.12.0",
+    "node-cron": "^3.0.3",
+    "open": "^8.4.2",
+    "rate-limiter-flexible": "^4.0.0",
+    "sentiment": "^5.0.2",
+    "sqlite3": "^5.1.6",
+    "twitter-api-v2": "^1.15.0",
+    "winston": "^3.11.0"
+  },
+  "keywords": [
+    "crypto",
+    "twitter-bot",
+    "ai",
+    "claude",
+    "forecasting",
+    "anchorman",
+    "ron-burgundy"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
