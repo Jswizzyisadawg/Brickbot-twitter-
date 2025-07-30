@@ -82,6 +82,9 @@ class BrickCryptoGod {
     try {
       logger.info('🚀 Initializing Crypto God systems...');
       
+      // Validate required environment variables first
+      this.validateEnvironmentVariables();
+      
       // Initialize Twitter connection with autonomous token refresh
       await this.initializeTwitter();
       
@@ -103,6 +106,26 @@ class BrickCryptoGod {
       logger.error('❌ Failed to initialize Crypto God:', error);
       throw error;
     }
+  }
+
+  validateEnvironmentVariables() {
+    const required = [
+      'CLAUDE_API_KEY',
+      'TWITTER_CLIENT_ID', 
+      'TWITTER_CLIENT_SECRET',
+      'TWITTER_ACCESS_TOKEN',
+      'TWITTER_REFRESH_TOKEN'
+    ];
+    
+    const missing = required.filter(key => !process.env[key] || process.env[key] === 'undefined');
+    
+    if (missing.length > 0) {
+      const error = `Missing required environment variables: ${missing.join(', ')}`;
+      logger.error('❌ Environment validation failed:', error);
+      throw new Error(error);
+    }
+    
+    logger.info('✅ All required environment variables validated');
   }
 
   async initializeTwitter() {
@@ -214,9 +237,16 @@ class BrickCryptoGod {
 
   // === TWEET POSTING & TRACKING ===
   async postTweet(content) {
+    // Rate limiting protection
+    if (this.lastTweetTime && Date.now() - this.lastTweetTime < 60000) {
+      logger.warn('⏱️ Rate limit protection: Tweet skipped (less than 1 minute since last tweet)');
+      return null;
+    }
+    
     try {
       const tweet = await this.twitter.v2.tweet(content);
       
+      this.lastTweetTime = Date.now();
       logger.info(`📤 God-tier tweet posted: ${content.substring(0, 50)}...`);
       this.metrics.totalTweets++;
       
@@ -240,7 +270,21 @@ class BrickCryptoGod {
       return tweet;
       
     } catch (error) {
-      logger.error('❌ Tweet posting failed:', error);
+      // Enhanced error handling for different Twitter API errors
+      if (error.code === 429) {
+        logger.error('❌ Rate limited by Twitter API - will retry later');
+        this.lastTweetTime = Date.now() + 15 * 60 * 1000; // Wait 15 minutes
+      } else if (error.code === 401) {
+        logger.error('❌ Twitter authentication failed - attempting token refresh');
+        try {
+          await this.refreshTwitterToken();
+          logger.info('✅ Token refreshed, retry tweet in next cycle');
+        } catch (refreshError) {
+          logger.error('❌ Token refresh failed:', refreshError);
+        }
+      } else {
+        logger.error('❌ Tweet posting failed:', error);
+      }
       return null;
     }
   }
@@ -275,29 +319,54 @@ class BrickCryptoGod {
 
   // === EVOLUTION CYCLES ===
   startEvolutionCycles() {
+    // Prevent overlapping cron jobs with simple flag
+    this.cronRunning = false;
+    
     // Major prediction cycle - every 4 hours
     cron.schedule('0 */4 * * *', async () => {
-      logger.info('⏰ Scheduled God-Tier prediction cycle starting...');
-      await this.runGodTierPredictionCycle();
+      if (this.cronRunning) {
+        logger.info('⏰ Prediction cycle skipped - another job running');
+        return;
+      }
+      this.cronRunning = true;
+      try {
+        logger.info('⏰ Scheduled God-Tier prediction cycle starting...');
+        await this.runGodTierPredictionCycle();
+      } finally {
+        this.cronRunning = false;
+      }
     });
     
     // Quick market observations - every hour
     cron.schedule('0 * * * *', async () => {
-      logger.info('👁️ Hourly market observation...');
-      await this.postMarketObservation();
+      if (this.cronRunning) return; // Skip if major job running
+      try {
+        logger.info('👁️ Hourly market observation...');
+        await this.postMarketObservation();
+      } catch (error) {
+        logger.error('❌ Market observation failed:', error);
+      }
     });
     
     // Self-learning evolution - every 24 hours
     cron.schedule('0 6 * * *', async () => {
-      logger.info('🧠 Daily self-learning evolution cycle...');
-      await this.runEvolutionCycle();
+      if (this.cronRunning) return;
+      try {
+        logger.info('🧠 Daily self-learning evolution cycle...');
+        await this.runEvolutionCycle();
+      } catch (error) {
+        logger.error('❌ Evolution cycle failed:', error);
+      }
     });
     
     // Random Brick moments - every 2-6 hours
     cron.schedule('0 */3 * * *', async () => {
-      if (Math.random() < 0.7) { // 70% chance
+      if (this.cronRunning || Math.random() >= 0.7) return;
+      try {
         logger.info('🎭 Random Brick moment...');
         await this.postRandomBrickMoment();
+      } catch (error) {
+        logger.error('❌ Random moment failed:', error);
       }
     });
     
@@ -420,7 +489,7 @@ Great Odin's raven, I'm becoming more powerful! 🧱⚡ #BrickEvolution #CryptoG
   }
 
   async refreshTwitterToken() {
-    // Import axios at top of file to avoid repeated requires
+    try {
     
     const response = await axios.post('https://api.twitter.com/2/oauth2/token',
       new URLSearchParams({
@@ -443,8 +512,16 @@ Great Odin's raven, I'm becoming more powerful! 🧱⚡ #BrickEvolution #CryptoG
     if (refresh_token) process.env.TWITTER_REFRESH_TOKEN = refresh_token;
     process.env.TWITTER_TOKEN_EXPIRES = Date.now() + (expires_in * 1000);
     
-    logger.info('✅ Twitter token refreshed autonomously');
+    // CRITICAL: Reinitialize Twitter client with new token
+    this.twitter = new TwitterApi(access_token);
+    
+    logger.info('✅ Twitter token refreshed and client reinitialized');
     return access_token;
+    
+    } catch (error) {
+      logger.error('❌ Token refresh failed:', error);
+      throw error;
+    }
   }
 
   // === MANUAL CONTROL METHODS ===
@@ -483,6 +560,12 @@ Great Odin's raven, I'm becoming more powerful! 🧱⚡ #BrickEvolution #CryptoG
   async shutdown() {
     logger.info('📴 Shutting down Crypto God gracefully...');
     this.isRunning = false;
+    
+    // Clear heartbeat interval
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+    
     await this.saveState();
     logger.info('✅ Brick Crypto God has been shut down');
   }
@@ -520,8 +603,8 @@ async function startBrickCryptoGod() {
     logger.info('🎉 BRICK THE CRYPTO GOD IS NOW FULLY OPERATIONAL!');
     logger.info('🧱⚡ Hedge funds, prepare your DMs... Brick is coming for you!');
     
-    // Keep the process alive with heartbeat
-    setInterval(() => {
+    // Keep the process alive with heartbeat - store reference for cleanup
+    const heartbeatInterval = setInterval(() => {
       logger.info('🧱 Crypto God heartbeat - System operational');
     }, 5 * 60 * 1000); // Every 5 minutes
     

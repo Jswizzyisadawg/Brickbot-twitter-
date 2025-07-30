@@ -227,18 +227,37 @@ Return as JSON:
     });
 
     try {
-      return JSON.parse(response.content[0].text);
-    } catch (error) {
-      // Fallback if JSON parsing fails
+      const jsonResponse = JSON.parse(response.content[0].text);
+      
+      // Validate and sanitize response
       return {
-        direction: "neutral",
-        priceTarget: "TBD",
+        direction: jsonResponse.direction || 'neutral',
+        priceTarget: jsonResponse.priceTarget || 'TBD',
+        priceRange: jsonResponse.priceRange || 'TBD',
+        confidence: Math.min(100, Math.max(0, jsonResponse.confidence || 60)),
+        timeframe: jsonResponse.timeframe || this.timeframe,
+        keyFactors: Array.isArray(jsonResponse.keyFactors) ? jsonResponse.keyFactors : ['analysis_pending'],
+        risks: Array.isArray(jsonResponse.risks) ? jsonResponse.risks : ['unknown_risks'],
+        catalysts: Array.isArray(jsonResponse.catalysts) ? jsonResponse.catalysts : ['market_dynamics']
+      };
+    } catch (error) {
+      logger.error('Failed to parse prediction JSON:', error.message);
+      
+      // Try to extract basic info from text
+      const text = response.content[0].text;
+      let direction = 'neutral';
+      if (text.toLowerCase().includes('bullish') || text.toLowerCase().includes('up')) direction = 'bullish';
+      if (text.toLowerCase().includes('bearish') || text.toLowerCase().includes('down')) direction = 'bearish';
+      
+      return {
+        direction,
+        priceTarget: "Analysis pending",
         priceRange: "TBD",
-        confidence: 60,
+        confidence: 50, // Low confidence due to parsing error
         timeframe: this.timeframe,
-        keyFactors: ["parsing_error"],
-        risks: ["prediction_error"],
-        catalysts: ["technical_issue"]
+        keyFactors: ["json_parsing_error"],
+        risks: ["ai_response_format_issue"],
+        catalysts: ["technical_analysis_pending"]
       };
     }
   }

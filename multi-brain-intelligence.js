@@ -120,17 +120,50 @@ Return as JSON:
     });
 
     try {
-      return JSON.parse(response.content[0].text);
+      const jsonResponse = JSON.parse(response.content[0].text);
+      
+      // Validate required fields
+      const requiredFields = ['consensus', 'confidence', 'priceTarget', 'timeframe'];
+      const missing = requiredFields.filter(field => !jsonResponse[field]);
+      
+      if (missing.length > 0) {
+        logger.warn(`Missing fields in AI response: ${missing.join(', ')}`);
+        // Fill in missing fields with defaults
+        missing.forEach(field => {
+          switch(field) {
+            case 'consensus': jsonResponse.consensus = 'neutral'; break;
+            case 'confidence': jsonResponse.confidence = 60; break;
+            case 'priceTarget': jsonResponse.priceTarget = 'TBD'; break;
+            case 'timeframe': jsonResponse.timeframe = 'uncertain'; break;
+          }
+        });
+      }
+      
+      return jsonResponse;
     } catch (error) {
-      // Fallback if JSON parsing fails
+      logger.error('Failed to parse AI response JSON:', error.message);
+      logger.warn('Using fallback response structure');
+      
+      // Enhanced fallback with partial text analysis
+      const text = response.content[0].text;
+      let extractedConsensus = 'neutral';
+      let extractedConfidence = 60;
+      
+      // Try to extract some useful info from raw text
+      if (text.toLowerCase().includes('bullish')) extractedConsensus = 'bullish';
+      if (text.toLowerCase().includes('bearish')) extractedConsensus = 'bearish';
+      
+      const confidenceMatch = text.match(/(\d+)%/); 
+      if (confidenceMatch) extractedConfidence = parseInt(confidenceMatch[1]);
+      
       return {
-        consensus: "neutral",
-        confidence: 60,
-        priceTarget: "TBD",
+        consensus: extractedConsensus,
+        confidence: extractedConfidence,
+        priceTarget: "Analysis pending",
         timeframe: "uncertain",
-        keyFactors: ["analysis_error"],
-        risks: ["parsing_error"],
-        brickExplanation: response.content[0].text
+        keyFactors: ["json_parsing_error"],
+        risks: ["ai_response_format_issue"],
+        brickExplanation: text.substring(0, 200) + '...' // Truncate for safety
       };
     }
   }

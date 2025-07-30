@@ -276,6 +276,12 @@ Create ${contentType} that authentically reflects your current personality state
   // === PERSONALITY-AWARE TWEET GENERATION ===
   async generateAdaptiveTweet(marketData, predictionData = null, tweetType = 'general') {
     try {
+      // Input validation
+      if (!marketData && tweetType === 'market_observation') {
+        logger.warn('No market data provided for market observation tweet');
+        tweetType = 'random_thought';
+      }
+      
       const personalityPrompt = await this.generatePersonalityPrompt('tweet', {
         marketData,
         predictionData,
@@ -286,11 +292,13 @@ Create ${contentType} that authentically reflects your current personality state
       
       switch (tweetType) {
         case 'prediction':
-          specificPrompt = `Create a prediction tweet about ${predictionData?.asset || 'crypto'} with your current personality. Include specific price targets and confidence level.`;
+          const asset = predictionData?.asset || 'crypto';
+          specificPrompt = `Create a prediction tweet about ${asset} with your current personality. Include specific price targets and confidence level.`;
           break;
           
         case 'market_observation':
-          specificPrompt = `Comment on current market conditions with your personality. Reference specific data like fear/greed index: ${marketData?.market?.sentiment?.value || 'unknown'}`;
+          const sentiment = marketData?.market?.sentiment?.value || 'unknown';
+          specificPrompt = `Comment on current market conditions with your personality. Reference specific data like fear/greed index: ${sentiment}`;
           break;
           
         case 'random_thought':
@@ -313,11 +321,27 @@ Keep it under 280 characters. Make it sound authentic and spontaneous, not scrip
         messages: [{ role: "user", content: fullPrompt }]
       });
 
-      return response.content[0].text;
+      let tweetText = response.content[0].text;
+      
+      // Validate tweet length and truncate if necessary
+      if (tweetText.length > 280) {
+        logger.warn('Tweet too long, truncating...');
+        tweetText = tweetText.substring(0, 277) + '...';
+      }
+      
+      return tweetText;
       
     } catch (error) {
       logger.error('❌ Adaptive tweet generation failed:', error);
-      return "Great Odin's raven! My personality system is confused right now. But I still love lamp! 🧱💡 #StayClassy";
+      
+      // Fallback tweets based on personality state
+      const fallbacks = [
+        "Great Odin's raven! My personality system is confused right now. But I still love lamp! 🧱💡 #StayClassy",
+        "60% of the time, my AI works every time! Currently experiencing technical difficulties... #BrickLife 🧱",
+        "While staring at my lamp, I realize sometimes even crypto gods need a reboot! 💡⚡ #TechnicalDifficulties"
+      ];
+      
+      return fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
   }
 

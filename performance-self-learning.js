@@ -30,6 +30,11 @@ class PerformanceSelfLearningSystem {
     this.learningInsights = new Map(); 
     this.marketPatterns = new Map();
     
+    // Memory management - limit sizes
+    this.maxHistorySize = 1000;
+    this.maxTweetSize = 500;
+    this.maxInsightsSize = 100;
+    
     // Learning metrics
     this.performance = {
       predictions: {
@@ -87,6 +92,13 @@ class PerformanceSelfLearningSystem {
       }
       
       this.predictionHistory.set(predictionId, trackingData);
+      
+      // Memory management - keep only recent predictions
+      if (this.predictionHistory.size > this.maxHistorySize) {
+        const oldestKey = this.predictionHistory.keys().next().value;
+        this.predictionHistory.delete(oldestKey);
+      }
+      
       logger.info(`📊 Prediction ${predictionId} tracked - Accuracy: ${trackingData.accuracy || 'Pending'}%`);
       
       return trackingData;
@@ -150,10 +162,17 @@ class PerformanceSelfLearningSystem {
         engagement: engagementData,
         score: this.calculateEngagementScore(engagementData),
         type: this.classifyTweetType(tweetContent),
-        sentiment: await this.analyzeTweetSentiment(tweetContent)
+        sentiment: this.analyzeTweetSentiment(tweetContent)
       };
       
       this.tweetPerformance.set(tweetId, tweetTracking);
+      
+      // Memory management - keep only recent tweets
+      if (this.tweetPerformance.size > this.maxTweetSize) {
+        const oldestKey = this.tweetPerformance.keys().next().value;
+        this.tweetPerformance.delete(oldestKey);
+      }
+      
       this.updateSocialMetrics(tweetTracking);
       
       // Learn from high-performing tweets
@@ -183,6 +202,24 @@ class PerformanceSelfLearningSystem {
     if (content.includes('Great Odin')) return 'catchphrase';
     if (content.includes('%') || content.includes('confidence')) return 'analysis';
     return 'general';
+  }
+
+  analyzeTweetSentiment(content) {
+    // Simple sentiment analysis
+    const positive = ['good', 'great', 'awesome', 'bullish', 'up', 'gains', 'love', 'amazing'];
+    const negative = ['bad', 'terrible', 'bearish', 'down', 'loss', 'crash', 'hate', 'awful'];
+    
+    const words = content.toLowerCase().split(' ');
+    let score = 0;
+    
+    words.forEach(word => {
+      if (positive.some(p => word.includes(p))) score += 1;
+      if (negative.some(n => word.includes(n))) score -= 1;
+    });
+    
+    if (score > 0) return 'positive';
+    if (score < 0) return 'negative';
+    return 'neutral';
   }
 
   updateSocialMetrics(tweetTracking) {

@@ -60,11 +60,24 @@ class OmniscientDataCore {
     
     try {
       const data = await fetchFn();
-      this.cache.set(key, { data, timestamp: Date.now() });
+      if (data) {
+        this.cache.set(key, { data, timestamp: Date.now() });
+        
+        // Memory management - limit cache size
+        if (this.cache.size > 50) {
+          const oldestKey = this.cache.keys().next().value;
+          this.cache.delete(oldestKey);
+        }
+      }
       return data;
     } catch (error) {
       logger.error(`Failed to fetch ${key}:`, error.message);
-      return cached ? cached.data : null;
+      // Return stale data if available, with warning
+      if (cached) {
+        logger.warn(`Using stale data for ${key} due to API failure`);
+        return cached.data;
+      }
+      return null;
     }
   }
 
@@ -175,10 +188,10 @@ class OmniscientDataCore {
 
   // === HELPER FUNCTIONS FOR TECHNICAL ANALYSIS ===
   calculateSMA(prices, period) {
-    if (prices.length < period) return null;
+    if (!prices || prices.length < period || period <= 0) return null;
     const recent = prices.slice(-period);
-    const sum = recent.reduce((acc, price) => acc + price[1], 0);
-    return sum / period;
+    const sum = recent.reduce((acc, price) => acc + (price[1] || 0), 0);
+    return period > 0 ? sum / period : null;
   }
 
   calculateRSI(prices, period = 14) {
