@@ -116,8 +116,7 @@ Return as JSON:
     const response = await this.claude.messages.create({
       model: "claude-3-5-sonnet-20241022",
       max_tokens: 1000,
-      messages: [{ role: "user", content: synthesisPrompt }],
-      timeout: 30000
+      messages: [{ role: "user", content: synthesisPrompt }]
     });
 
     try {
