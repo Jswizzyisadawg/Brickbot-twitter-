@@ -520,12 +520,15 @@ async function startBrickCryptoGod() {
     logger.info('🎉 BRICK THE CRYPTO GOD IS NOW FULLY OPERATIONAL!');
     logger.info('🧱⚡ Hedge funds, prepare your DMs... Brick is coming for you!');
     
-    // Keep the process alive
+    // Keep the process alive with heartbeat
     setInterval(() => {
       logger.info('🧱 Crypto God heartbeat - System operational');
     }, 5 * 60 * 1000); // Every 5 minutes
     
-    return brickGod;
+    // Log immediate heartbeat to confirm system is alive
+    logger.info('🧱 Crypto God heartbeat - System operational');
+    
+    // Don't return - keep function running to maintain process
     
   } catch (error) {
     logger.error('💥 FAILED TO START CRYPTO GOD:', error);
