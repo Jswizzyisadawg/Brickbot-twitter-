@@ -1,15 +1,20 @@
 {
   "name": "brick-bot",
-  "version": "2.0.0",
-  "description": "Advanced AI-powered crypto forecasting bot with Ron Burgundy personality",
-  "main": "index.js",
+  "version": "3.0.0",
+  "description": "🧱⚡ BRICK THE CRYPTO GOD - Omniscient AI forecasting deity with god-tier market intelligence",
+  "main": "brick-crypto-god.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js",
+    "start": "node brick-crypto-god.js",
+    "dev": "node brick-crypto-god.js",
+    "legacy": "node index.js",
     "setup": "node setup.js",
     "test-forecast": "node brick-forecaster.js",
+    "test-data": "node -e \"require('./omniscient-data-core').OmniscientDataCore; console.log('Data core test')\"",
+    "test-brains": "node -e \"require('./multi-brain-intelligence').MultiBrainIntelligence; console.log('Multi-brain test')\"",
+    "god-prediction": "node -e \"const { BrickCryptoGod } = require('./brick-crypto-god'); const god = new BrickCryptoGod(); god.initialize().then(() => god.generateOnDemandPrediction('ethereum')).then(console.log)\"",
     "deploy": "railway up",
-    "logs": "railway logs"
+    "logs": "railway logs",
+    "status": "node -e \"const { BrickCryptoGod } = require('./brick-crypto-god'); const god = new BrickCryptoGod(); console.log(god.getSystemStatus())\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.3",
@@ -32,7 +37,12 @@
     "claude",
     "forecasting",
     "anchorman",
-    "ron-burgundy"
+    "ron-burgundy",
+    "crypto-god",
+    "omniscient-ai",
+    "market-intelligence",
+    "prediction-engine",
+    "hedge-fund-killer"
   ],
   "engines": {
     "node": ">=16.0.0"
