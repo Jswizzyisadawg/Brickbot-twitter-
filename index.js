@@ -12,6 +12,10 @@ async function refreshTwitterToken() {
     try {
         console.log('🔄 Refreshing Twitter access token...');
         
+        if (!process.env.TWITTER_REFRESH_TOKEN || process.env.TWITTER_REFRESH_TOKEN === 'undefined') {
+            throw new Error('No refresh token available - please run setup.js locally');
+        }
+        
         const response = await axios.post('https://api.twitter.com/2/oauth2/token',
             new URLSearchParams({
                 grant_type: 'refresh_token',
@@ -22,7 +26,8 @@ async function refreshTwitterToken() {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'Authorization': `Basic ${Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64')}`
-                }
+                },
+                timeout: 15000
             }
         );
 
@@ -34,30 +39,41 @@ async function refreshTwitterToken() {
         process.env.TWITTER_TOKEN_EXPIRES = Date.now() + (expires_in * 1000);
         
         console.log('✅ Twitter token refreshed successfully');
+        console.log(`🕐 New token expires: ${new Date(Date.now() + (expires_in * 1000)).toISOString()}`);
+        console.log('🎯 Brick is now fully autonomous!');
         return access_token;
         
     } catch (error) {
         console.error('❌ Failed to refresh Twitter token:', error.response?.data || error.message);
+        console.error('🔍 Debug info:', {
+            hasRefreshToken: !!process.env.TWITTER_REFRESH_TOKEN,
+            hasClientId: !!process.env.TWITTER_CLIENT_ID,
+            hasClientSecret: !!process.env.TWITTER_CLIENT_SECRET,
+            refreshTokenLength: process.env.TWITTER_REFRESH_TOKEN?.length || 0
+        });
         throw error;
     }
 }
 
 async function getValidTwitterToken() {
-    // If we have a stored access token, use it directly
-    if (process.env.TWITTER_ACCESS_TOKEN && process.env.TWITTER_ACCESS_TOKEN !== 'undefined') {
-        return process.env.TWITTER_ACCESS_TOKEN;
+    const tokenExpiry = parseInt(process.env.TWITTER_TOKEN_EXPIRES || '0');
+    const now = Date.now();
+    
+    // Check if token is expired or will expire soon (5 minutes)
+    const isExpired = now >= (tokenExpiry - 300000);
+    
+    if (isExpired && process.env.TWITTER_REFRESH_TOKEN && process.env.TWITTER_REFRESH_TOKEN !== 'undefined') {
+        console.log('🔄 Token expired, attempting refresh...');
+        try {
+            return await refreshTwitterToken();
+        } catch (error) {
+            console.error('❌ Token refresh failed, using existing token as fallback');
+            // Fall back to existing token - better than nothing
+        }
     }
     
-    // If no stored token, try to refresh (only if we have refresh token)
-    if (process.env.TWITTER_REFRESH_TOKEN && process.env.TWITTER_REFRESH_TOKEN !== 'undefined') {
-        const tokenExpiry = parseInt(process.env.TWITTER_TOKEN_EXPIRES || '0');
-        const now = Date.now();
-        
-        // If token expires in less than 5 minutes, refresh it
-        if (now >= (tokenExpiry - 300000)) {
-            return await refreshTwitterToken();
-        }
-        
+    // Use stored access token
+    if (process.env.TWITTER_ACCESS_TOKEN && process.env.TWITTER_ACCESS_TOKEN !== 'undefined') {
         return process.env.TWITTER_ACCESS_TOKEN;
     }
     
