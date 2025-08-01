@@ -83,19 +83,46 @@ class OmniscientDataCore {
 
   // === PRICE & MARKET DATA ===
   async getCurrentPrices(coins = ['bitcoin', 'ethereum', 'cardano', 'solana', 'chainlink']) {
+    // Input validation
+    if (!Array.isArray(coins) || coins.length === 0) {
+      logger.warn('⚠️ Invalid coins array provided to getCurrentPrices');
+      return {};
+    }
+    
     return this.fetchWithCache('current_prices', async () => {
-      const response = await axios.get(`${this.dataSources.coingecko.baseUrl}/simple/price`, {
-        params: {
-          ids: coins.join(','),
-          vs_currencies: 'usd',
-          include_24hr_change: true,
-          include_24hr_vol: true,
-          include_market_cap: true
+      try {
+        const response = await axios.get(`${this.dataSources.coingecko.baseUrl}/simple/price`, {
+          params: {
+            ids: coins.join(','),
+            vs_currencies: 'usd',
+            include_24hr_change: true,
+            include_24hr_vol: true,
+            include_market_cap: true
+          },
+          timeout: 15000 // 15 second timeout
+        });
+        
+        // Validate response
+        if (!response.data || typeof response.data !== 'object') {
+          logger.error('❌ Invalid response from CoinGecko prices API');
+          return {};
         }
-      });
-      
-      logger.info(`📊 Fetched prices for ${coins.length} assets`);
-      return response.data;
+        
+        logger.info(`📊 Fetched prices for ${coins.length} assets`);
+        return response.data;
+        
+      } catch (error) {
+        logger.error('❌ Failed to fetch current prices:', error.message);
+        
+        // Handle specific errors
+        if (error.code === 'ECONNABORTED') {
+          logger.error('⏰ CoinGecko timeout - API may be slow');
+        } else if (error.response?.status === 429) {
+          logger.error('🚫 Rate limited by CoinGecko');
+        }
+        
+        return {}; // Return empty object instead of throwing
+      }
     });
   }
 

@@ -48,33 +48,50 @@ const logger = winston.createLogger({
 
 class BrickCryptoGod {
   constructor() {
-    // Initialize all advanced systems
-    this.dataCore = new OmniscientDataCore();
-    this.multiBrain = new MultiBrainIntelligence();
-    this.predictionEngine = new AdvancedPredictionEngine();
-    this.personality = new DynamicPersonalityEvolution();
-    this.learningSystem = new PerformanceSelfLearningSystem();
-    
-    // Twitter integration
-    this.twitter = null;
-    
-    // Core state
-    this.isRunning = false;
-    this.currentMarketSnapshot = null;
-    this.lastPrediction = null;
-    this.evolutionCycle = 0;
-    
-    // Performance metrics
-    this.metrics = {
-      totalPredictions: 0,
-      totalTweets: 0,
-      averageAccuracy: 0,
-      socialEngagement: 0,
-      lastEvolution: null
-    };
-    
-    logger.info('🧱⚡ BRICK THE CRYPTO GOD HAS AWAKENED!');
-    logger.info('🔮 All systems initialized - Omniscience activated');
+    try {
+      // Initialize all advanced systems with error handling
+      logger.info('🔧 Initializing Brick God components...');
+      
+      this.dataCore = new OmniscientDataCore();
+      logger.info('✅ Data Core initialized');
+      
+      this.multiBrain = new MultiBrainIntelligence();
+      logger.info('✅ Multi-Brain Intelligence initialized');
+      
+      this.predictionEngine = new AdvancedPredictionEngine();
+      logger.info('✅ Prediction Engine initialized');
+      
+      this.personality = new DynamicPersonalityEvolution();
+      logger.info('✅ Personality Evolution initialized');
+      
+      this.learningSystem = new PerformanceSelfLearningSystem();
+      logger.info('✅ Learning System initialized');
+      
+      // Twitter integration
+      this.twitter = null;
+      
+      // Core state
+      this.isRunning = false;
+      this.currentMarketSnapshot = null;
+      this.lastPrediction = null;
+      this.evolutionCycle = 0;
+      
+      // Performance metrics
+      this.metrics = {
+        totalPredictions: 0,
+        totalTweets: 0,
+        averageAccuracy: 0,
+        socialEngagement: 0,
+        lastEvolution: null
+      };
+      
+      logger.info('🧱⚡ BRICK THE CRYPTO GOD HAS AWAKENED!');
+      logger.info('🔮 All systems initialized - Omniscience activated');
+      
+    } catch (error) {
+      logger.error('❌ Brick God constructor failed:', error);
+      throw new Error(`Brick God initialization failed: ${error.message}`);
+    }
   }
 
   // === MASTER INITIALIZATION ===
@@ -571,52 +588,263 @@ Great Odin's raven, I'm becoming more powerful! 🧱⚡ #BrickEvolution #CryptoG
   }
 }
 
-// === STARTUP SEQUENCE ===
-async function startBrickCryptoGod() {
-  try {
-    const fs = require('fs').promises;
-    await fs.mkdir('logs', { recursive: true });
+// === BULLETPROOF STARTUP SYSTEM ===
+class BrickStartupManager {
+  constructor() {
+    this.brickGod = null;
+    this.httpServer = null;
+    this.heartbeatInterval = null;
+    this.isShuttingDown = false;
+    this.startupStage = 'INITIALIZING';
+  }
+  
+  // Step 1: Validate Railway Environment
+  async validateRailwayEnvironment() {
+    logger.info('🔍 Step 1: Validating Railway environment...');
     
-    logger.info('🚀 INITIALIZING BRICK THE CRYPTO GOD...');
-    logger.info('⚡ Activating omniscient market intelligence...');
+    // Required for Railway deployment
+    const railwayPort = process.env.PORT || 3000;
+    const nodeEnv = process.env.NODE_ENV || 'production';
     
-    const brickGod = new BrickCryptoGod();
-    await brickGod.initialize();
+    logger.info(`📡 Railway PORT: ${railwayPort}`);
+    logger.info(`🏗️ NODE_ENV: ${nodeEnv}`);
     
-    brickGod.isRunning = true;
+    return { port: railwayPort, env: nodeEnv };
+  }
+  
+  // Step 2: Create Health Check Server (Railway Requirement)
+  async createHealthCheckServer(port) {
+    logger.info('🏥 Step 2: Creating Railway health check server...');
     
-    // Graceful shutdown handling
-    process.on('SIGINT', async () => {
-      logger.info('📴 Shutdown signal received...');
-      await brickGod.shutdown();
-      process.exit(0);
+    const express = require('express');
+    const app = express();
+    
+    // Health check endpoint for Railway
+    app.get('/', (req, res) => {
+      res.json({
+        status: 'operational',
+        service: 'Brick Crypto God',
+        stage: this.startupStage,
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+      });
     });
     
+    // Status endpoint with detailed info
+    app.get('/status', (req, res) => {
+      res.json({
+        brickGod: this.brickGod ? 'initialized' : 'not_initialized',
+        isRunning: this.brickGod?.isRunning || false,
+        stage: this.startupStage,
+        memory: process.memoryUsage(),
+        version: '3.0.0'
+      });
+    });
+    
+    return new Promise((resolve, reject) => {
+      this.httpServer = app.listen(port, (error) => {
+        if (error) {
+          logger.error('❌ Failed to start health check server:', error);
+          reject(error);
+        } else {
+          logger.info(`✅ Health check server running on port ${port}`);
+          resolve(app);
+        }
+      });
+    });
+  }
+  
+  // Step 3: Safe File System Setup
+  async setupFileSystem() {
+    logger.info('📁 Step 3: Setting up file system safely...');
+    
+    const fs = require('fs').promises;
+    const dirs = ['logs'];
+    
+    for (const dir of dirs) {
+      try {
+        await fs.mkdir(dir, { recursive: true });
+        logger.info(`✅ Created directory: ${dir}`);
+      } catch (error) {
+        // Non-critical - continue without file logging if needed
+        logger.warn(`⚠️ Could not create ${dir}:`, error.message);
+      }
+    }
+  }
+  
+  // Step 4: Validate Dependencies
+  async validateDependencies() {
+    logger.info('🔧 Step 4: Validating dependencies...');
+    
+    const required = [
+      'dotenv', 'winston', 'axios', 'twitter-api-v2', 'node-cron'
+    ];
+    
+    for (const dep of required) {
+      try {
+        require(dep);
+        logger.info(`✅ Dependency OK: ${dep}`);
+      } catch (error) {
+        logger.error(`❌ Missing dependency: ${dep}`);
+        throw new Error(`Critical dependency missing: ${dep}`);
+      }
+    }
+  }
+  
+  // Step 5: Safe Brick God Initialization
+  async initializeBrickGod() {
+    logger.info('🧱 Step 5: Initializing Brick Crypto God...');
+    this.startupStage = 'INITIALIZING_BRICK_GOD';
+    
+    try {
+      // Create instance with error handling
+      this.brickGod = new BrickCryptoGod();
+      logger.info('✅ Brick God instance created');
+      
+      // Initialize with timeout protection
+      const initPromise = this.brickGod.initialize();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Initialization timeout')), 60000)
+      );
+      
+      await Promise.race([initPromise, timeoutPromise]);
+      logger.info('✅ Brick God initialized successfully');
+      
+      this.brickGod.isRunning = true;
+      this.startupStage = 'OPERATIONAL';
+      
+    } catch (error) {
+      logger.error('❌ Brick God initialization failed:', error);
+      this.startupStage = 'FAILED';
+      throw error;
+    }
+  }
+  
+  // Step 6: Setup Process Handlers
+  setupProcessHandlers() {
+    logger.info('🛡️ Step 6: Setting up bulletproof process handlers...');
+    
+    const gracefulShutdown = async (signal) => {
+      if (this.isShuttingDown) {
+        logger.info('🔄 Shutdown already in progress, ignoring signal');
+        return;
+      }
+      
+      this.isShuttingDown = true;
+      logger.info(`📴 Received ${signal}, initiating graceful shutdown...`);
+      
+      try {
+        // Clear heartbeat
+        if (this.heartbeatInterval) {
+          clearInterval(this.heartbeatInterval);
+          logger.info('✅ Heartbeat stopped');
+        }
+        
+        // Shutdown Brick God
+        if (this.brickGod?.isRunning) {
+          await this.brickGod.shutdown();
+          logger.info('✅ Brick God shutdown complete');
+        }
+        
+        // Close HTTP server
+        if (this.httpServer) {
+          this.httpServer.close(() => {
+            logger.info('✅ HTTP server closed');
+          });
+        }
+        
+        logger.info('✅ Graceful shutdown complete');
+        
+        // Exit cleanly
+        setTimeout(() => {
+          logger.info('👋 Process exiting...');
+          process.exit(0);
+        }, 2000);
+        
+      } catch (error) {
+        logger.error('❌ Error during shutdown:', error);
+        process.exit(1);
+      }
+    };
+    
+    // Railway signals
+    process.on('SIGTERM', () => {
+      logger.info('🛑 SIGTERM from Railway');
+      gracefulShutdown('SIGTERM');
+    });
+    
+    process.on('SIGINT', () => {
+      logger.info('🛑 SIGINT (Ctrl+C)');
+      gracefulShutdown('SIGINT');
+    });
+    
+    // Error handlers
     process.on('uncaughtException', (error) => {
       logger.error('💥 Uncaught Exception:', error);
+      gracefulShutdown('uncaughtException');
     });
     
-    process.on('unhandledRejection', (reason, promise) => {
+    process.on('unhandledRejection', (reason) => {
       logger.error('💥 Unhandled Rejection:', reason);
+      gracefulShutdown('unhandledRejection');
     });
-    
-    logger.info('🎉 BRICK THE CRYPTO GOD IS NOW FULLY OPERATIONAL!');
-    logger.info('🧱⚡ Hedge funds, prepare your DMs... Brick is coming for you!');
-    
-    // Keep the process alive with heartbeat - store reference for cleanup
-    const heartbeatInterval = setInterval(() => {
-      logger.info('🧱 Crypto God heartbeat - System operational');
-    }, 5 * 60 * 1000); // Every 5 minutes
-    
-    // Log immediate heartbeat to confirm system is alive
-    logger.info('🧱 Crypto God heartbeat - System operational');
-    
-    // Don't return - keep function running to maintain process
-    
-  } catch (error) {
-    logger.error('💥 FAILED TO START CRYPTO GOD:', error);
-    process.exit(1);
   }
+  
+  // Step 7: Start Heartbeat
+  startHeartbeat() {
+    logger.info('💓 Step 7: Starting system heartbeat...');
+    
+    this.heartbeatInterval = setInterval(() => {
+      try {
+        logger.info('🧱 Crypto God heartbeat - System operational');
+      } catch (error) {
+        logger.error('❌ Heartbeat error:', error);
+      }
+    }, 5 * 60 * 1000);
+    
+    // Immediate heartbeat
+    logger.info('🧱 Crypto God heartbeat - System operational');
+  }
+  
+  // Master Startup Function
+  async start() {
+    try {
+      logger.info('🚀 BULLETPROOF STARTUP SEQUENCE INITIATED');
+      logger.info('⚡ Activating omniscient market intelligence...');
+      
+      // Sequential startup steps
+      const { port } = await this.validateRailwayEnvironment();
+      await this.createHealthCheckServer(port);
+      await this.setupFileSystem();
+      await this.validateDependencies();
+      await this.initializeBrickGod();
+      this.setupProcessHandlers();
+      this.startHeartbeat();
+      
+      logger.info('🎉 BRICK THE CRYPTO GOD IS NOW FULLY OPERATIONAL!');
+      logger.info('🧱⚡ Railway-proof, bulletproof, and ready to dominate!');
+      logger.info('🎯 Hedge funds, prepare your DMs... Brick is coming for you!');
+      
+      return true;
+      
+    } catch (error) {
+      logger.error('💥 BULLETPROOF STARTUP FAILED:', error);
+      this.startupStage = 'FAILED';
+      
+      // Cleanup on failure
+      if (this.httpServer) {
+        this.httpServer.close();
+      }
+      
+      process.exit(1);
+    }
+  }
+}
+
+// === STARTUP EXECUTION ===
+async function startBrickCryptoGod() {
+  const startupManager = new BrickStartupManager();
+  await startupManager.start();
 }
 
 if (require.main === module) {

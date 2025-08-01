@@ -6,6 +6,46 @@ const cron = require('node-cron');
 const axios = require('axios');
 const winston = require('winston');
 const fs = require('fs').promises;
+const path = require('path');
+
+// === PERSISTENT TOKEN STORAGE ===
+const TOKEN_FILE = path.join(__dirname, 'persistent_tokens.json');
+
+async function saveTokensToPersistentStorage(tokens) {
+    try {
+        const tokenData = {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            expires_at: tokens.expires_at,
+            updated_at: Date.now()
+        };
+        
+        await fs.writeFile(TOKEN_FILE, JSON.stringify(tokenData, null, 2));
+        console.log('💾 Tokens saved to persistent storage');
+    } catch (error) {
+        console.error('❌ Failed to save tokens:', error.message);
+    }
+}
+
+async function loadTokensFromPersistentStorage() {
+    try {
+        const data = await fs.readFile(TOKEN_FILE, 'utf8');
+        const tokens = JSON.parse(data);
+        
+        // Update environment variables from persistent storage
+        process.env.TWITTER_ACCESS_TOKEN = tokens.access_token;
+        process.env.TWITTER_REFRESH_TOKEN = tokens.refresh_token;
+        process.env.TWITTER_TOKEN_EXPIRES = tokens.expires_at;
+        
+        console.log('📁 Loaded tokens from persistent storage');
+        console.log(`🕐 Token expires: ${new Date(tokens.expires_at).toISOString()}`);
+        
+        return tokens;
+    } catch (error) {
+        console.log('ℹ️ No persistent tokens found, using environment variables');
+        return null;
+    }
+}
 
 // === OAUTH 2.0 TOKEN MANAGEMENT ===
 async function refreshTwitterToken() {
@@ -32,15 +72,23 @@ async function refreshTwitterToken() {
         );
 
         const { access_token, refresh_token, expires_in } = response.data;
+        const expires_at = Date.now() + (expires_in * 1000);
         
         // Update environment variables in memory
         process.env.TWITTER_ACCESS_TOKEN = access_token;
         if (refresh_token) process.env.TWITTER_REFRESH_TOKEN = refresh_token;
-        process.env.TWITTER_TOKEN_EXPIRES = Date.now() + (expires_in * 1000);
+        process.env.TWITTER_TOKEN_EXPIRES = expires_at;
         
-        console.log('✅ Twitter token refreshed successfully');
-        console.log(`🕐 New token expires: ${new Date(Date.now() + (expires_in * 1000)).toISOString()}`);
-        console.log('🎯 Brick is now fully autonomous!');
+        // 🔥 SAVE TO PERSISTENT STORAGE - SURVIVES RAILWAY RESTARTS!
+        await saveTokensToPersistentStorage({
+            access_token,
+            refresh_token: refresh_token || process.env.TWITTER_REFRESH_TOKEN,
+            expires_at
+        });
+        
+        console.log('✅ Twitter token refreshed and persisted successfully');
+        console.log(`🕐 New token expires: ${new Date(expires_at).toISOString()}`);
+        console.log('🎯 Brick is now fully autonomous and Railway-proof!');
         return access_token;
         
     } catch (error) {
@@ -56,6 +104,9 @@ async function refreshTwitterToken() {
 }
 
 async function getValidTwitterToken() {
+    // 🔥 FIRST: Try to load persisted tokens from file
+    await loadTokensFromPersistentStorage();
+    
     const tokenExpiry = parseInt(process.env.TWITTER_TOKEN_EXPIRES || '0');
     const now = Date.now();
     
@@ -67,13 +118,20 @@ async function getValidTwitterToken() {
         try {
             return await refreshTwitterToken();
         } catch (error) {
-            console.error('❌ Token refresh failed, using existing token as fallback');
+            console.error('❌ Token refresh failed:', error.message);
+            // Log more details for debugging
+            console.error('🔍 Refresh attempt failed with:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                hasRefreshToken: !!process.env.TWITTER_REFRESH_TOKEN
+            });
             // Fall back to existing token - better than nothing
         }
     }
     
     // Use stored access token
     if (process.env.TWITTER_ACCESS_TOKEN && process.env.TWITTER_ACCESS_TOKEN !== 'undefined') {
+        console.log('✅ Using valid Twitter token');
         return process.env.TWITTER_ACCESS_TOKEN;
     }
     
@@ -81,19 +139,78 @@ async function getValidTwitterToken() {
     throw new Error('No valid Twitter tokens available. Please run setup.js locally first.');
 }
 
+// === RATE LIMITER CLASS ===
+class RateLimiter {
+  constructor() {
+    this.apiCalls = new Map();
+    this.limits = {
+      twitter: { requests: 15, window: 15 * 60 * 1000 }, // 15 requests per 15 minutes
+      coingecko: { requests: 50, window: 60 * 1000 }     // 50 requests per minute
+    };
+  }
+  
+  async waitIfNeeded(apiType) {
+    const now = Date.now();
+    const limit = this.limits[apiType];
+    
+    if (!this.apiCalls.has(apiType)) {
+      this.apiCalls.set(apiType, []);
+    }
+    
+    const calls = this.apiCalls.get(apiType);
+    
+    // Remove old calls outside the window
+    while (calls.length > 0 && now - calls[0] >= limit.window) {
+      calls.shift();
+    }
+    
+    // If at limit, wait until oldest call expires
+    if (calls.length >= limit.requests) {
+      const waitTime = limit.window - (now - calls[0]) + 1000; // +1s buffer
+      logger.warn(`🚫 Rate limit reached for ${apiType}, waiting ${waitTime}ms`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      return this.waitIfNeeded(apiType); // Recursive check after wait
+    }
+    
+    // Record this call
+    calls.push(now);
+  }
+  
+  async withRetry(apiType, fn, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.waitIfNeeded(apiType);
+        return await fn();
+      } catch (error) {
+        const isRateLimit = error.code === 429 || error.response?.status === 429;
+        
+        if (isRateLimit && attempt < maxRetries) {
+          const backoffTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+          logger.warn(`🔄 Rate limited, backing off ${backoffTime}ms (attempt ${attempt}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, backoffTime));
+          continue;
+        }
+        
+        throw error;
+      }
+    }
+  }
+}
+
 // === TWITTER COIN DISCOVERY ===
 class TwitterCoinDiscovery {
   constructor(twitterClient) {
     this.twitter = twitterClient;
+    this.rateLimiter = new RateLimiter();
     this.coinPattern = /\$([A-Z]{2,10})(?![A-Z])/g;
     this.contractPattern = /0x[a-fA-F0-9]{40}/g;
     this.processedCoins = new Set();
     this.coinMentions = new Map();
-    logger.info('🔍 Twitter Coin Discovery initialized');
+    logger.info('🔍 Twitter Coin Discovery initialized with rate limiting');
   }
 
   async monitorTwitterForCoins() {
-    try {
+    return this.rateLimiter.withRetry('twitter', async () => {
       const searchTerms = ['$', 'new coin', 'contract', 'trending', 'crypto', 'token'];
       const randomTerm = searchTerms[Math.floor(Math.random() * searchTerms.length)];
       
@@ -107,9 +224,11 @@ class TwitterCoinDiscovery {
           await this.analyzeTwitterCoin(tweet);
         }
       }
-    } catch (error) {
-      logger.error('Error monitoring Twitter for coins:', error);
-    }
+      
+      logger.info(`🔍 Monitored Twitter for coins with term: "${randomTerm}"`);
+    }).catch(error => {
+      logger.error('❌ Twitter coin monitoring failed:', error.message);
+    });
   }
 
   async analyzeTwitterCoin(tweet) {
@@ -332,46 +451,70 @@ class CryptoTracker {
 
   async checkForSignificantMoves() {
     try {
-      // Check meme coins
+      // Check meme coins with error handling
       const memeCoins = Object.keys(this.memeCoinDatabase);
-      const memeData = await this.getPriceData(memeCoins);
+      let memeData = {};
+      let memeAlerts = [];
       
-      const memeAlerts = [];
-      for (const [id, data] of Object.entries(memeData)) {
-        const change = data.usd_24h_change;
-        const coinInfo = this.memeCoinDatabase[id];
-        
-        if (Math.abs(change) > coinInfo.threshold) {
-          memeAlerts.push({
-            type: 'meme',
-            coin: coinInfo,
-            change: change,
-            price: data.usd
-          });
+      try {
+        memeData = await this.getPriceData(memeCoins);
+      } catch (memeError) {
+        logger.error('❌ Failed to fetch meme coin data:', memeError.message);
+        // Continue with empty data instead of crashing
+      }
+      
+      // Only process if we got data
+      if (Object.keys(memeData).length > 0) {
+        for (const [id, data] of Object.entries(memeData)) {
+          if (data && typeof data.usd_24h_change === 'number') {
+            const change = data.usd_24h_change;
+            const coinInfo = this.memeCoinDatabase[id];
+            
+            if (coinInfo && Math.abs(change) > coinInfo.threshold) {
+              memeAlerts.push({
+                type: 'meme',
+                coin: coinInfo,
+                change: change,
+                price: data.usd
+              });
+            }
+          }
         }
       }
       
-      // Check major coins
-      const majorData = await this.getPriceData(this.majorCoins);
-      const majorAlerts = [];
+      // Check major coins with error handling
+      let majorData = {};
+      let majorAlerts = [];
       
-      for (const [id, data] of Object.entries(majorData)) {
-        const change = data.usd_24h_change;
-        
-        if (Math.abs(change) > 5) { // 5% threshold for major coins
-          majorAlerts.push({
-            type: 'major',
-            coin: { name: id.toUpperCase(), symbol: id.toUpperCase() },
-            change: change,
-            price: data.usd
-          });
+      try {
+        majorData = await this.getPriceData(this.majorCoins);
+      } catch (majorError) {
+        logger.error('❌ Failed to fetch major coin data:', majorError.message);
+        // Continue with empty data instead of crashing
+      }
+      
+      // Only process if we got data
+      if (Object.keys(majorData).length > 0) {
+        for (const [id, data] of Object.entries(majorData)) {
+          if (data && typeof data.usd_24h_change === 'number') {
+            const change = data.usd_24h_change;
+            
+            if (Math.abs(change) > 5) { // 5% threshold for major coins
+              majorAlerts.push({
+                type: 'major',
+                coin: { name: id.toUpperCase(), symbol: id.toUpperCase() },
+                change: change,
+                price: data.usd
+              });
+            }
+          }
         }
       }
       
       return [...memeAlerts, ...majorAlerts];
     } catch (error) {
-      logger.error('Error checking for significant moves:', error.message);
-      return [];
+      logger.error('❌ Critical error in price monitoring:', error.message);
+      return []; // Always return array to prevent crashes
     }
   }
 
@@ -693,7 +836,28 @@ class MentionMonitor {
         }
       }
     } catch (error) {
-      logger.error('Error checking mentions:', error.message);
+      logger.error('❌ Twitter mention check failed:', error.message);
+      
+      // Handle specific Twitter API errors
+      if (error.code === 429) {
+        logger.warn('🚫 Rate limited - backing off mention checks');
+        return;
+      }
+      
+      if (error.code === 401) {
+        logger.error('🔑 Twitter authentication failed - token may be expired');
+        // Try to refresh token
+        try {
+          await refreshTwitterToken();
+          logger.info('✅ Token refreshed, retrying mentions check');
+          return this.checkMentions();
+        } catch (refreshError) {
+          logger.error('❌ Token refresh failed:', refreshError.message);
+        }
+      }
+      
+      // Don't crash on API errors - log and continue
+      logger.warn('⚠️ Skipping mention check due to API error');
     }
   }
 
