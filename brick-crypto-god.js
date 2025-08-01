@@ -5,6 +5,7 @@ require('dotenv').config();
 const winston = require('winston');
 const cron = require('node-cron');
 const axios = require('axios');
+const { TwitterApi } = require('twitter-api-v2');
 
 // Import all advanced systems
 const { OmniscientDataCore } = require('./omniscient-data-core');
@@ -482,11 +483,15 @@ Great Odin's raven, I'm becoming more powerful! 🧱⚡ #BrickEvolution #CryptoG
     }
   }
 
-  // === AUTONOMOUS TOKEN REFRESH (from original system) ===
+  // === AUTONOMOUS TOKEN REFRESH ===
   async getValidTwitterToken() {
+    // Try to load persisted tokens first
+    await this.loadTokensFromPersistentStorage();
+    
     const tokenExpiry = parseInt(process.env.TWITTER_TOKEN_EXPIRES || '0');
     const now = Date.now();
     
+    // Check if token is expired or will expire soon (5 minutes buffer)
     const isExpired = now >= (tokenExpiry - 300000);
     
     if (isExpired && process.env.TWITTER_REFRESH_TOKEN && process.env.TWITTER_REFRESH_TOKEN !== 'undefined') {
@@ -495,48 +500,106 @@ Great Odin's raven, I'm becoming more powerful! 🧱⚡ #BrickEvolution #CryptoG
         return await this.refreshTwitterToken();
       } catch (error) {
         logger.error('❌ Token refresh failed, using existing token as fallback');
+        logger.error('🔍 This may cause API failures until tokens are manually refreshed');
       }
     }
     
     if (process.env.TWITTER_ACCESS_TOKEN && process.env.TWITTER_ACCESS_TOKEN !== 'undefined') {
+      logger.info('✅ Using valid Twitter token');
       return process.env.TWITTER_ACCESS_TOKEN;
     }
     
     throw new Error('No valid Twitter tokens available. Please run setup.js locally first.');
   }
+  
+  async loadTokensFromPersistentStorage() {
+    try {
+      const fs = require('fs').promises;
+      const data = await fs.readFile('persistent_tokens.json', 'utf8');
+      const tokens = JSON.parse(data);
+      
+      // Update environment variables from persistent storage
+      process.env.TWITTER_ACCESS_TOKEN = tokens.access_token;
+      process.env.TWITTER_REFRESH_TOKEN = tokens.refresh_token;
+      process.env.TWITTER_TOKEN_EXPIRES = tokens.expires_at;
+      
+      logger.info('📁 Loaded tokens from persistent storage');
+      logger.info(`🕐 Token expires: ${new Date(tokens.expires_at).toISOString()}`);
+      
+      return tokens;
+    } catch (error) {
+      logger.info('ℹ️ No persistent tokens found, using environment variables');
+      return null;
+    }
+  }
 
   async refreshTwitterToken() {
     try {
-    
-    const response = await axios.post('https://api.twitter.com/2/oauth2/token',
-      new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: process.env.TWITTER_REFRESH_TOKEN,
-        client_id: process.env.TWITTER_CLIENT_ID
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64')}`
-        },
-        timeout: 15000
+      logger.info('🔄 Refreshing Twitter access token...');
+      
+      if (!process.env.TWITTER_REFRESH_TOKEN || process.env.TWITTER_REFRESH_TOKEN === 'undefined') {
+        throw new Error('No refresh token available - tokens may be expired');
       }
-    );
+      
+      const response = await axios.post('https://api.twitter.com/2/oauth2/token',
+        new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: process.env.TWITTER_REFRESH_TOKEN,
+          client_id: process.env.TWITTER_CLIENT_ID
+        }),
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Basic ${Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64')}`
+          },
+          timeout: 15000
+        }
+      );
 
-    const { access_token, refresh_token, expires_in } = response.data;
-    
-    process.env.TWITTER_ACCESS_TOKEN = access_token;
-    if (refresh_token) process.env.TWITTER_REFRESH_TOKEN = refresh_token;
-    process.env.TWITTER_TOKEN_EXPIRES = Date.now() + (expires_in * 1000);
-    
-    // CRITICAL: Reinitialize Twitter client with new token
-    this.twitter = new TwitterApi(access_token);
-    
-    logger.info('✅ Twitter token refreshed and client reinitialized');
-    return access_token;
-    
+      const { access_token, refresh_token, expires_in } = response.data;
+      const expires_at = Date.now() + (expires_in * 1000);
+      
+      // Update environment variables in memory
+      process.env.TWITTER_ACCESS_TOKEN = access_token;
+      if (refresh_token) process.env.TWITTER_REFRESH_TOKEN = refresh_token;
+      process.env.TWITTER_TOKEN_EXPIRES = expires_at;
+      
+      // CRITICAL: Reinitialize Twitter client with new token
+      this.twitter = new TwitterApi(access_token);
+      
+      // Save to persistent storage (Railway-proof)
+      try {
+        const fs = require('fs').promises;
+        const tokenData = {
+          access_token,
+          refresh_token: refresh_token || process.env.TWITTER_REFRESH_TOKEN,
+          expires_at,
+          updated_at: Date.now()
+        };
+        await fs.writeFile('persistent_tokens.json', JSON.stringify(tokenData, null, 2));
+        logger.info('💾 Tokens saved to persistent storage');
+      } catch (saveError) {
+        logger.warn('⚠️ Could not save tokens to file:', saveError.message);
+      }
+      
+      logger.info('✅ Twitter token refreshed and client reinitialized');
+      logger.info(`🕐 New token expires: ${new Date(expires_at).toISOString()}`);
+      return access_token;
+      
     } catch (error) {
-      logger.error('❌ Token refresh failed:', error);
+      logger.error('❌ Token refresh failed:', error.response?.data || error.message);
+      
+      // Detailed error logging for debugging
+      logger.error('🔍 Refresh debug info:', {
+        hasRefreshToken: !!process.env.TWITTER_REFRESH_TOKEN,
+        hasClientId: !!process.env.TWITTER_CLIENT_ID,
+        hasClientSecret: !!process.env.TWITTER_CLIENT_SECRET,
+        refreshTokenLength: process.env.TWITTER_REFRESH_TOKEN?.length || 0,
+        errorStatus: error.response?.status,
+        errorData: error.response?.data
+      });
+      
+      throw error;
       throw error;
     }
   }
