@@ -14,8 +14,7 @@ const { AdvancedPredictionEngine } = require('./advanced-prediction-engine');
 const { DynamicPersonalityEvolution } = require('./dynamic-personality-evolution');
 const { PerformanceSelfLearningSystem } = require('./performance-self-learning');
 
-// Original components we'll enhance
-const { TwitterApi } = require('twitter-api-v2');
+// TwitterApi already imported above
 
 // Logger setup with directory creation
 const fs = require('fs');
@@ -599,7 +598,6 @@ Great Odin's raven, I'm becoming more powerful! 🧱⚡ #BrickEvolution #CryptoG
         errorData: error.response?.data
       });
       
-      throw error;
       throw error;
     }
   }
