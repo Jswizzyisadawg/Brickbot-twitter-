@@ -14,6 +14,11 @@ const { AdvancedPredictionEngine } = require('./advanced-prediction-engine');
 const { DynamicPersonalityEvolution } = require('./dynamic-personality-evolution');
 const { PerformanceSelfLearningSystem } = require('./performance-self-learning');
 
+// NEW 4-PHASE SYSTEM INTEGRATION
+const { IntelligenceEngine } = require('./intelligence-engine');
+const { SocialIntelligence } = require('./social-intelligence');
+const { StrategyOutreachEngine } = require('./strategic-outreach-engine');
+
 // TwitterApi already imported above
 
 // Logger setup with directory creation
@@ -67,8 +72,18 @@ class BrickCryptoGod {
       this.learningSystem = new PerformanceSelfLearningSystem();
       logger.info('✅ Learning System initialized');
       
-      // Twitter integration
-      this.twitter = null;
+      // NEW 4-PHASE SYSTEM INTEGRATION
+      this.intelligenceEngine = new IntelligenceEngine();
+      logger.info('✅ Intelligence Engine (Phase 2) initialized');
+      
+      this.socialIntelligence = new SocialIntelligence(); 
+      logger.info('✅ Social Intelligence (Phase 3) initialized');
+      
+      this.strategicOutreach = new StrategyOutreachEngine();
+      logger.info('✅ Strategic Outreach (Phase 4) initialized');
+      
+      // Twitter integration (using Social Intelligence Twitter client)
+      this.twitter = this.socialIntelligence.twitter;
       
       // Core state
       this.isRunning = false;
@@ -386,8 +401,56 @@ class BrickCryptoGod {
         logger.error('❌ Random moment failed:', error);
       }
     });
+
+    // NEW: Social Intelligence - Twitter Mentions & Responses (every 10 minutes)
+    cron.schedule('*/10 * * * *', async () => {
+      if (this.cronRunning) return;
+      try {
+        logger.info('👂 Checking for Twitter mentions and engaging...');
+        await this.socialIntelligence.analyzeAndRespond();
+      } catch (error) {
+        logger.error('❌ Social intelligence cycle failed:', error);
+      }
+    });
+
+    // NEW: Strategic Outreach - Discovery & Networking (every 2 hours)
+    cron.schedule('0 */2 * * *', async () => {
+      if (this.cronRunning) return;
+      try {
+        logger.info('🎯 Running strategic outreach cycle...');
+        const discoveries = await this.strategicOutreach.discoverQualityAccounts(['bitcoin', 'ethereum', 'defi'], 10);
+        if (discoveries.length > 0) {
+          logger.info(`🔍 Found ${discoveries.length} high-quality accounts to engage with`);
+        }
+      } catch (error) {
+        logger.error('❌ Strategic outreach cycle failed:', error);
+      }
+    });
+
+    // NEW: Intelligence Engine - Enhanced Analysis (every 30 minutes)
+    cron.schedule('*/30 * * * *', async () => {
+      if (this.cronRunning) return;
+      try {
+        logger.info('🧠 Running intelligence engine cycle...');
+        const intelligence = await this.intelligenceEngine.runIntelligenceCycle();
+        
+        // If high confidence signals detected, post about them
+        if (intelligence.signals.length > 0) {
+          const highConfidenceSignals = intelligence.signals.filter(s => s.confidence > 75);
+          if (highConfidenceSignals.length > 0) {
+            logger.info(`📊 ${highConfidenceSignals.length} high-confidence signals detected`);
+            const tweet = await this.socialIntelligence.generateSignalTweet(highConfidenceSignals, intelligence.personality);
+            if (tweet) {
+              await this.postTweet(tweet);
+            }
+          }
+        }
+      } catch (error) {
+        logger.error('❌ Intelligence engine cycle failed:', error);
+      }
+    });
     
-    logger.info('⏰ All evolution cycles scheduled and active');
+    logger.info('⏰ All evolution cycles scheduled and active (including 4-phase system)');
   }
 
   async postMarketObservation() {
