@@ -464,7 +464,7 @@ class OmniscientDataCore {
         const confidence = this.calculateConfidenceScore(indicators, confluence);
         
         const result = {
-          symbol,
+          symbol: productId,
           timestamp: Date.now(),
           indicators,
           confluence,
@@ -472,11 +472,11 @@ class OmniscientDataCore {
           tradingSignal: this.generateTradingSignal(confidence, indicators)
         };
         
-        logger.info(`📊 Advanced technical analysis completed for ${symbol} - Confidence: ${confidence.score}%`);
+        logger.info(`📊 Advanced technical analysis completed for ${productId} - Confidence: ${confidence.score}%`);
         return result;
         
       } catch (error) {
-        logger.error(`❌ Failed to generate advanced technical signals for ${symbol}:`, error.message);
+        logger.error(`❌ Failed to generate advanced technical signals for ${productId}:`, error.message);
         return null;
       }
     });
@@ -484,17 +484,82 @@ class OmniscientDataCore {
 
   // === LEGACY METHOD (Enhanced) ===
   async getTechnicalSignals(coinId = 'ethereum') {
-    // Convert coin ID to Binance symbol
+    // Convert coin ID to Coinbase product ID
     const symbolMap = {
-      'ethereum': 'ETHUSDT',
-      'bitcoin': 'BTCUSDT', 
-      'solana': 'SOLUSDT',
-      'cardano': 'ADAUSDT',
-      'chainlink': 'LINKUSDT'
+      'ethereum': 'ETH-USD',
+      'bitcoin': 'BTC-USD', 
+      'solana': 'SOL-USD',
+      'cardano': 'ADA-USD',
+      'chainlink': 'LINK-USD'
     };
     
-    const symbol = symbolMap[coinId] || 'ETHUSDT';
-    return this.getAdvancedTechnicalSignals(symbol);
+    const productId = symbolMap[coinId] || 'ETH-USD';
+    return this.getAdvancedTechnicalSignals(productId);
+  }
+
+  // Helper method to convert various symbol formats
+  coinbaseProductToCoinGeckoId(productId) {
+    const map = {
+      'ETH-USD': 'ethereum',
+      'BTC-USD': 'bitcoin',
+      'SOL-USD': 'solana', 
+      'ADA-USD': 'cardano',
+      'LINK-USD': 'chainlink',
+      'AVAX-USD': 'avalanche-2',
+      'MATIC-USD': 'matic-network',
+      'DOT-USD': 'polkadot',
+      // Handle old Binance format
+      'ETHUSDT': 'ethereum',
+      'BTCUSDT': 'bitcoin',
+      'SOLUSDT': 'solana',
+      'ADAUSDT': 'cardano',
+      'LINKUSDT': 'chainlink'
+    };
+    
+    return map[productId] || null;
+  }
+
+  async getCoinGeckoHistoricalData(coinId, days = 100, interval = 'daily') {
+    try {
+      logger.info(`🦎 Fetching CoinGecko historical data for ${coinId}...`);
+      
+      const response = await axios.get(`${this.dataSources.coingecko.baseUrl}/coins/${coinId}/market_chart`, {
+        params: {
+          vs_currency: 'usd',
+          days: days,
+          interval: interval === 'hourly' ? 'hourly' : 'daily'
+        },
+        timeout: 15000
+      });
+
+      if (!response.data || !response.data.prices) {
+        logger.warn(`⚠️ No historical data returned for ${coinId}`);
+        return [];
+      }
+
+      // Transform to OHLC format (approximated from price data)
+      const transformedData = response.data.prices.map((item, index) => {
+        const timestamp = item[0];
+        const price = item[1];
+        const volume = response.data.total_volumes[index] ? response.data.total_volumes[index][1] : 0;
+        
+        return {
+          timestamp,
+          open: price,
+          high: price * 1.02, // Approximate high (2% above close)
+          low: price * 0.98,  // Approximate low (2% below close)
+          close: price,
+          volume: volume
+        };
+      });
+
+      logger.info(`✅ Successfully fetched ${transformedData.length} CoinGecko data points for ${coinId}`);
+      return transformedData;
+
+    } catch (error) {
+      logger.error(`❌ Failed to fetch CoinGecko historical data for ${coinId}:`, error.message);
+      return [];
+    }
   }
 
   // === TRADING SIGNAL GENERATION ===
@@ -1325,23 +1390,190 @@ class OmniscientDataCore {
     let mood = 'neutral';
     let confidence = 0.6;
     
+    // Handle null or missing data gracefully
+    if (!sentiment) {
+      logger.warn('⚠️ Missing sentiment data for mood determination');
+      return { mood: 'analytical_with_limited_data', confidence: 0.4 };
+    }
+    
     // Adjust based on market conditions
     if (sentiment.value <= 25 || sentiment.value >= 75) {
       mood = 'confused_but_insightful';
       confidence = 0.8; // Brick is best at extremes
     }
     
-    if (technicals.priceAction.volatility > 5) {
-      mood = 'excited_and_confused';
-      confidence = 0.7;
-    }
-    
-    if (technicals.priceAction.trend === 'bullish' && sentiment.value > 55) {
-      mood = 'confident';
-      confidence = 0.85;
+    // Only check technical data if it exists and has the expected structure
+    if (technicals && technicals.priceAction) {
+      if (technicals.priceAction.volatility > 5) {
+        mood = 'excited_and_confused';
+        confidence = 0.7;
+      }
+      
+      if (technicals.priceAction.trend === 'bullish' && sentiment.value > 55) {
+        mood = 'confident';
+        confidence = 0.85;
+      }
+    } else if (!technicals) {
+      logger.warn('⚠️ Missing technical data for mood determination');
     }
     
     return { mood, confidence };
+  }
+
+  // === CONFLUENCE AND CONFIDENCE CALCULATIONS ===
+  calculateConfluence(indicators) {
+    const signals = [];
+    
+    // RSI signals
+    if (indicators.rsi !== undefined && indicators.rsi !== null) {
+      if (indicators.rsi < 30) signals.push({ type: 'rsi', signal: 'bullish', strength: 0.8 });
+      else if (indicators.rsi > 70) signals.push({ type: 'rsi', signal: 'bearish', strength: 0.8 });
+      else if (indicators.rsi < 45) signals.push({ type: 'rsi', signal: 'bullish', strength: 0.4 });
+      else if (indicators.rsi > 55) signals.push({ type: 'rsi', signal: 'bearish', strength: 0.4 });
+    }
+
+    // MACD signals
+    if (indicators.macd && indicators.macd.macd !== undefined) {
+      if (indicators.macd.macd > indicators.macd.signal) {
+        signals.push({ type: 'macd', signal: 'bullish', strength: 0.6 });
+      } else {
+        signals.push({ type: 'macd', signal: 'bearish', strength: 0.6 });
+      }
+    }
+
+    // Moving average signals
+    if (indicators.sma20 && indicators.sma50) {
+      if (indicators.sma20 > indicators.sma50) {
+        signals.push({ type: 'ma_cross', signal: 'bullish', strength: 0.5 });
+      } else {
+        signals.push({ type: 'ma_cross', signal: 'bearish', strength: 0.5 });
+      }
+    }
+
+    // Bollinger Bands signals
+    if (indicators.bollingerBands && indicators.currentPrice) {
+      if (indicators.currentPrice < indicators.bollingerBands.lower) {
+        signals.push({ type: 'bb', signal: 'bullish', strength: 0.7 });
+      } else if (indicators.currentPrice > indicators.bollingerBands.upper) {
+        signals.push({ type: 'bb', signal: 'bearish', strength: 0.7 });
+      }
+    }
+
+    // Calculate confluence
+    const bullishSignals = signals.filter(s => s.signal === 'bullish');
+    const bearishSignals = signals.filter(s => s.signal === 'bearish');
+    
+    const bullishStrength = bullishSignals.reduce((sum, s) => sum + s.strength, 0);
+    const bearishStrength = bearishSignals.reduce((sum, s) => sum + s.strength, 0);
+    
+    let direction, strength;
+    if (bullishStrength > bearishStrength) {
+      direction = 'bullish';
+      strength = bullishStrength > 2 ? 'strong' : bullishStrength > 1 ? 'moderate' : 'weak';
+    } else if (bearishStrength > bullishStrength) {
+      direction = 'bearish';  
+      strength = bearishStrength > 2 ? 'strong' : bearishStrength > 1 ? 'moderate' : 'weak';
+    } else {
+      direction = 'neutral';
+      strength = 'weak';
+    }
+
+    return {
+      signals,
+      direction,
+      strength,
+      bullishCount: bullishSignals.length,
+      bearishCount: bearishSignals.length,
+      confluenceScore: Math.abs(bullishStrength - bearishStrength)
+    };
+  }
+
+  calculateConfidenceScore(indicators, confluence) {
+    let confidence = 50; // Base confidence
+    
+    // Add confidence based on confluence
+    confidence += confluence.confluenceScore * 10;
+    
+    // Add confidence based on number of confirming signals
+    const totalSignals = confluence.bullishCount + confluence.bearishCount;
+    confidence += totalSignals * 5;
+    
+    // Penalize if indicators are missing
+    const indicatorCount = Object.values(indicators).filter(v => v !== null && v !== undefined).length;
+    if (indicatorCount < 5) confidence -= (5 - indicatorCount) * 8;
+    
+    // Boost confidence for extreme RSI readings
+    if (indicators.rsi < 25 || indicators.rsi > 75) confidence += 15;
+    
+    // Boost confidence for strong volume confirmation
+    if (indicators.volumeProfile && indicators.volumeProfile.signal === 'strong_bullish') {
+      confidence += 10;
+    }
+
+    // Cap confidence between 0 and 100
+    confidence = Math.max(0, Math.min(100, confidence));
+    
+    const reasoning = this.generateConfidenceReasoning(indicators, confluence, confidence);
+    
+    return {
+      score: Math.round(confidence),
+      direction: confluence.direction,
+      strength: confluence.strength,
+      reasoning
+    };
+  }
+
+  generateConfidenceReasoning(indicators, confluence, confidence) {
+    const reasons = [];
+    
+    if (confluence.confluenceScore > 1.5) {
+      reasons.push('Strong signal confluence detected');
+    }
+    
+    if (indicators.rsi < 30) {
+      reasons.push('RSI shows oversold conditions');
+    } else if (indicators.rsi > 70) {
+      reasons.push('RSI shows overbought conditions');
+    }
+    
+    if (confluence.bullishCount > confluence.bearishCount) {
+      reasons.push(`${confluence.bullishCount} bullish vs ${confluence.bearishCount} bearish signals`);
+    } else if (confluence.bearishCount > confluence.bullishCount) {
+      reasons.push(`${confluence.bearishCount} bearish vs ${confluence.bullishCount} bullish signals`);
+    }
+    
+    if (confidence > 80) {
+      reasons.push('High confidence due to multiple confirmations');
+    } else if (confidence < 40) {
+      reasons.push('Low confidence due to mixed signals');
+    }
+    
+    return reasons.join('; ');
+  }
+
+  // === TECHNICAL INDICATOR INTERPRETATION METHODS ===
+  interpretMACD(macdValue) {
+    if (macdValue > 0) return { signal: 'bullish', strength: 'moderate' };
+    else return { signal: 'bearish', strength: 'moderate' };
+  }
+
+  interpretBollingerBands(sma, standardDeviation) {
+    const width = (standardDeviation * 2) / sma * 100;
+    if (width > 20) return { signal: 'high_volatility', strength: 'strong' };
+    else if (width < 10) return { signal: 'low_volatility', strength: 'weak' };
+    else return { signal: 'normal_volatility', strength: 'moderate' };
+  }
+
+  interpretStochastic(kValue) {
+    if (kValue < 20) return { signal: 'oversold', strength: 'strong' };
+    else if (kValue > 80) return { signal: 'overbought', strength: 'strong' };
+    else return { signal: 'neutral', strength: 'weak' };
+  }
+
+  interpretWilliamsR(wValue) {
+    if (wValue < -80) return { signal: 'oversold', strength: 'strong' };
+    else if (wValue > -20) return { signal: 'overbought', strength: 'strong' };
+    else return { signal: 'neutral', strength: 'weak' };
   }
 }
 
