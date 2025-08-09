@@ -243,15 +243,116 @@ class SocialIntelligence {
       
       logger.info('👂 Scanning for mentions and crypto discussions...');
       
-      // For demo purposes, we'll simulate finding mentions
-      // In production, you'd implement actual Twitter API calls
-      const simulatedResponses = await this.generateSampleResponses();
+      // Try to get actual Twitter mentions
+      try {
+        const mentions = await this.getTwitterMentions();
+        if (mentions.length > 0) {
+          logger.info(`🔍 Found ${mentions.length} mentions to analyze`);
+          return await this.processRealMentions(mentions);
+        }
+      } catch (twitterError) {
+        logger.warn('⚠️ Could not fetch Twitter mentions:', twitterError.message);
+        logger.info('📝 Using simulated responses for demo');
+      }
       
+      // Fall back to simulated responses for demo
+      const simulatedResponses = await this.generateSampleResponses();
       return simulatedResponses;
       
     } catch (error) {
       logger.error('❌ Response analysis failed:', error);
       return [];
+    }
+  }
+
+  async getTwitterMentions() {
+    try {
+      // Get mentions from Twitter API
+      const mentionsResponse = await this.twitter.v2.userMentionTimeline('me', {
+        max_results: 10,
+        'tweet.fields': ['created_at', 'author_id', 'text', 'public_metrics']
+      });
+      
+      return mentionsResponse.data || [];
+    } catch (error) {
+      logger.error('❌ Failed to fetch Twitter mentions:', error);
+      throw error;
+    }
+  }
+
+  async processRealMentions(mentions) {
+    const responses = [];
+    
+    for (const mention of mentions.slice(0, 3)) { // Limit to 3 responses per cycle
+      try {
+        const shouldRespond = await this.shouldRespondToMention(mention);
+        
+        if (shouldRespond) {
+          const response = await this.generateContextualResponse(mention);
+          
+          if (response && this.incrementCount('replies')) {
+            try {
+              // Actually post the reply to Twitter
+              const reply = await this.twitter.v2.reply(response, mention.id);
+              logger.info(`✅ Posted reply to @${mention.author_id}: ${response.substring(0, 50)}...`);
+              
+              responses.push({
+                type: 'real_mention',
+                original: mention.text,
+                response: response,
+                mentionId: mention.id,
+                replyId: reply.data.id,
+                status: 'posted'
+              });
+              
+            } catch (postError) {
+              logger.error('❌ Failed to post reply:', postError.message);
+              
+              // Still track the response for metrics even if posting failed
+              responses.push({
+                type: 'real_mention',
+                original: mention.text,
+                response: response,
+                mentionId: mention.id,
+                status: 'failed',
+                error: postError.message
+              });
+            }
+          }
+        }
+      } catch (error) {
+        logger.error('❌ Failed to process mention:', error);
+      }
+    }
+    
+    return responses;
+  }
+
+  async shouldRespondToMention(mention) {
+    // Avoid responding to old mentions (>24 hours)
+    const mentionAge = Date.now() - new Date(mention.created_at).getTime();
+    if (mentionAge > 24 * 60 * 60 * 1000) return false;
+    
+    // Check for crypto-related content
+    const text = mention.text.toLowerCase();
+    const cryptoKeywords = ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'coin', 'trading', 'price', 'prediction'];
+    const hasCryptoContent = cryptoKeywords.some(keyword => text.includes(keyword));
+    
+    return hasCryptoContent;
+  }
+
+  async generateContextualResponse(mention) {
+    const text = mention.text.toLowerCase();
+    
+    // Analyze the mention content and generate appropriate response
+    if (text.includes('price') || text.includes('prediction')) {
+      return `The math is interesting here, but I'm just stacking probability data 📊\n\nDo your own research, I just stack data like bricks! 🧱`;
+    } else if (text.includes('bullish') || text.includes('moon')) {
+      return `The confluence looks decent, but remember - I see patterns, you make decisions 🧱\n\nTake this with a grain of salt and a pile of research! 🧂`;
+    } else if (text.includes('bearish') || text.includes('crash')) {
+      return `Math doesn't care about emotions. Corrections create opportunities if you know where to look 📊\n\nBuilt different, but still just stacking probabilities 🧱`;
+    } else {
+      return `Interesting perspective! My brick brain processes data, but you make the smart decisions 🧠\n\nReally good guesses meant to be helpful, not prophecy 🔮`;
     }
   }
 

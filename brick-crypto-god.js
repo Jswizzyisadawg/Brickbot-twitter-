@@ -580,15 +580,20 @@ Great Odin's raven, I'm becoming more powerful! 🧱⚡ #BrickEvolution #CryptoG
       const data = await fs.readFile('persistent_tokens.json', 'utf8');
       const tokens = JSON.parse(data);
       
-      // Update environment variables from persistent storage
-      process.env.TWITTER_ACCESS_TOKEN = tokens.access_token;
-      process.env.TWITTER_REFRESH_TOKEN = tokens.refresh_token;
-      process.env.TWITTER_TOKEN_EXPIRES = tokens.expires_at;
-      
-      logger.info('📁 Loaded tokens from persistent storage');
-      logger.info(`🕐 Token expires: ${new Date(tokens.expires_at).toISOString()}`);
-      
-      return tokens;
+      // Only update environment variables if persistent tokens are more complete
+      if (tokens.access_token && tokens.expires_at) {
+        process.env.TWITTER_ACCESS_TOKEN = tokens.access_token;
+        process.env.TWITTER_REFRESH_TOKEN = tokens.refresh_token;
+        process.env.TWITTER_TOKEN_EXPIRES = tokens.expires_at.toString();
+        
+        logger.info('📁 Loaded tokens from persistent storage');
+        logger.info(`🕐 Token expires: ${new Date(parseInt(tokens.expires_at)).toISOString()}`);
+        
+        return tokens;
+      } else {
+        logger.info('⚠️ Persistent tokens incomplete, using environment variables');
+        return null;
+      }
     } catch (error) {
       logger.info('ℹ️ No persistent tokens found, using environment variables');
       return null;
@@ -603,20 +608,36 @@ Great Odin's raven, I'm becoming more powerful! 🧱⚡ #BrickEvolution #CryptoG
         throw new Error('No refresh token available - tokens may be expired');
       }
       
-      const response = await axios.post('https://api.twitter.com/2/oauth2/token',
-        new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: process.env.TWITTER_REFRESH_TOKEN,
-          client_id: process.env.TWITTER_CLIENT_ID
-        }),
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': `Basic ${Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64')}`
-          },
-          timeout: 15000
+      logger.info(`🔍 Using refresh token: ${process.env.TWITTER_REFRESH_TOKEN.substring(0, 10)}...`);
+      logger.info(`🔍 Using client ID: ${process.env.TWITTER_CLIENT_ID}`);
+      
+      const requestBody = new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: process.env.TWITTER_REFRESH_TOKEN,
+        client_id: process.env.TWITTER_CLIENT_ID
+      });
+      
+      logger.info(`🔍 Request body: ${requestBody.toString()}`);
+      
+      const authHeader = `Basic ${Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64')}`;
+      logger.info(`🔍 Auth header: ${authHeader.substring(0, 20)}...`);
+      
+      const response = await axios.post('https://api.twitter.com/2/oauth2/token', requestBody, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': authHeader,
+          'User-Agent': 'BrickBot/1.0'
+        },
+        timeout: 15000,
+        validateStatus: function (status) {
+          return status < 500; // Don't throw on 4xx errors, let us handle them
         }
-      );
+      });
+
+      // Check if the request was successful
+      if (response.status !== 200) {
+        throw new Error(`Twitter API returned ${response.status}: ${JSON.stringify(response.data)}`);
+      }
 
       const { access_token, refresh_token, expires_in } = response.data;
       const expires_at = Date.now() + (expires_in * 1000);
@@ -624,7 +645,7 @@ Great Odin's raven, I'm becoming more powerful! 🧱⚡ #BrickEvolution #CryptoG
       // Update environment variables in memory
       process.env.TWITTER_ACCESS_TOKEN = access_token;
       if (refresh_token) process.env.TWITTER_REFRESH_TOKEN = refresh_token;
-      process.env.TWITTER_TOKEN_EXPIRES = expires_at;
+      process.env.TWITTER_TOKEN_EXPIRES = expires_at.toString(); // Convert to string
       
       // CRITICAL: Reinitialize Twitter client with new token
       this.twitter = new TwitterApi(access_token);
