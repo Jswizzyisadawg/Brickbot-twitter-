@@ -24,12 +24,7 @@ const logger = winston.createLogger({
 class StrategyOutreachEngine {
   constructor() {
     this.social = new SocialIntelligence();
-    this.twitter = new TwitterApi({
-      appKey: process.env.TWITTER_CLIENT_ID,
-      appSecret: process.env.TWITTER_CLIENT_SECRET,
-      accessToken: process.env.TWITTER_ACCESS_TOKEN,
-      accessSecret: process.env.TWITTER_REFRESH_TOKEN,
-    });
+    this.twitter = new TwitterApi(process.env.TWITTER_ACCESS_TOKEN);
     
     // Crypto-specific keywords for content filtering
     this.cryptoKeywords = {

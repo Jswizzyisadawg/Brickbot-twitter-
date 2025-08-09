@@ -25,12 +25,7 @@ class SocialIntelligence {
   constructor() {
     this.brain = new IntelligenceEngine();
     this.trinity = new OmniscientDataCore();
-    this.twitter = new TwitterApi({
-      appKey: process.env.TWITTER_CLIENT_ID,
-      appSecret: process.env.TWITTER_CLIENT_SECRET,
-      accessToken: process.env.TWITTER_ACCESS_TOKEN,
-      accessSecret: process.env.TWITTER_REFRESH_TOKEN,
-    });
+    this.twitter = new TwitterApi(process.env.TWITTER_ACCESS_TOKEN);
     
     // Rate limiting
     this.dailyLimits = {
