@@ -26,7 +26,7 @@ An autonomous Twitter bot with distinctive personality that provides cryptocurre
 
 ## 🚀 Deployment
 
-### Railway (Recommended)
+### Railway 
 1. Connect this repo to Railway
 2. Set environment variables in Railway dashboard
 3. Deploy automatically
