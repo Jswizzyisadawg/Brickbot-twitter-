@@ -9,6 +9,7 @@ const { BrickResearch } = require('./src/research');
 const { BrickJournal } = require('./src/journal');
 const { BrickLearning } = require('./src/learning');
 const { BrickEmotions } = require('./src/emotions');
+const { BrickDiscovery } = require('./src/discovery');
 
 class Brick {
   constructor() {
@@ -19,6 +20,7 @@ class Brick {
     this.journal = new BrickJournal();
     this.learning = new BrickLearning();
     this.emotions = new BrickEmotions();
+    this.discovery = new BrickDiscovery();
 
     this.isRunning = false;
     this.lastWakeTime = null;
@@ -161,12 +163,15 @@ class Brick {
         await this.processEngagement(tweet, evaluation, thoughtId?.id, emotionalResponse);
       }
 
-      // 5. MAYBE POST ORIGINAL THOUGHT
+      // 5. DISCOVERY MODE - Find new content and people
+      await this.runDiscovery();
+
+      // 6. MAYBE POST ORIGINAL THOUGHT
       if (Math.random() < 0.2) { // 20% chance each cycle
         await this.maybePostOriginal();
       }
 
-      // 6. REFLECT
+      // 7. REFLECT
       await this.reflect();
 
       const cycleTime = Math.round((Date.now() - cycleStart) / 1000);
@@ -406,6 +411,98 @@ ${emotionalContext}`;
         decisionContent: thought,
         reasoning: 'Felt like sharing something genuine'
       });
+    }
+  }
+
+  // === DISCOVERY MODE ===
+  // Proactively find interesting content and people
+
+  async runDiscovery() {
+    try {
+      // Set discovery mood
+      this.emotions.setState('curious', 0.8);
+      await this.journal.setMood('curious');
+      await this.journal.updateStatus('discovering');
+
+      // Run discovery
+      const discoveries = await this.discovery.discover(
+        this.twitter,
+        this.core,
+        this.emotions
+      );
+
+      if (!discoveries || discoveries.tweets.length === 0) {
+        console.log('   No interesting discoveries this cycle');
+        return;
+      }
+
+      // Process discovered content (similar to timeline processing)
+      console.log(`\n💎 Processing ${discoveries.tweets.length} discoveries...`);
+
+      for (const { tweet, topic, score, reason } of discoveries.tweets) {
+        // Skip if we've already engaged with this tweet
+        const alreadySeen = await this.memory.recall(tweet.id);
+        if (alreadySeen.length > 0) {
+          console.log(`   Skipping @${tweet.author} - already seen`);
+          continue;
+        }
+
+        // Evaluate with full Brick curiosity system
+        const evaluation = await this.core.evaluateCuriosity(
+          tweet.text,
+          this.emotions.getPromptModifier() + `\n[Discovered via search: "${topic}"]`,
+          tweet.media || []
+        );
+
+        console.log(`   @${tweet.author}: Spark ${evaluation.sparkLevel}/10 (discovery score: ${score})`);
+
+        // Higher threshold for discovered content (must be genuinely interesting)
+        if (evaluation.sparkLevel >= 7 && evaluation.shouldEngage) {
+          await this.processEngagement(tweet, evaluation, null, {
+            previousState: this.emotions.currentState,
+            newState: evaluation.emotionalState || 'curious'
+          });
+
+          // Remember this discovery
+          await this.memory.rememberConversation([
+            { role: 'system', content: `Discovered @${tweet.author} via "${topic}" search` },
+            { role: 'user', content: tweet.text }
+          ], { type: 'discovery', topic });
+
+          // Only engage with max 2 discovered tweets per cycle
+          break;
+        }
+      }
+
+      // Consider following interesting people
+      const followCandidates = await this.discovery.discoverPeopleToFollow(
+        this.twitter,
+        discoveries.tweets
+      );
+
+      if (followCandidates.length > 0) {
+        console.log(`\n👥 Evaluating ${followCandidates.length} people to follow...`);
+        const followed = await this.discovery.executeFollows(
+          this.twitter,
+          this.core,
+          followCandidates
+        );
+
+        for (const { user, reason } of followed) {
+          await this.journal.logAction({
+            type: 'follow',
+            targetAuthor: user.username,
+            why: reason
+          });
+          await this.memory.rememberPerson(user.username, `Followed because: ${reason}`);
+        }
+      }
+
+      // Clear discovery cache periodically
+      this.discovery.clearCache();
+
+    } catch (error) {
+      console.error('❌ Discovery error:', error.message);
     }
   }
 
