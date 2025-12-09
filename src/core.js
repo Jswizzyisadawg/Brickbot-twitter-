@@ -28,6 +28,10 @@ class BrickCore {
       return true;
     } catch (error) {
       console.error('Error loading constitution:', error.message);
+      // Fallback system prompt so Claude API doesn't break
+      this.constitution = '';
+      this.systemPrompt = `You are Brick - a curious AI presence on X (Twitter). You're genuine, curious, and love exploring ideas about AI, consciousness, nature, and emergence. Keep responses concise and authentic.`;
+      console.log('📜 Using fallback system prompt');
       return false;
     }
   }

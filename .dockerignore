@@ -31,3 +31,4 @@ brick_preferences.json
 # Documentation (not needed in production)
 *.md
 !README.md
+!BRICK_SEED_CONSTITUTION.md
