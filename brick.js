@@ -73,6 +73,9 @@ class Brick {
       await this.journal.updateStatus('waking');
       await this.journal.setMood('scanning');
 
+      // 1.5. KEEP TOKENS FRESH (proactive refresh every cycle)
+      await this.twitter.keepTokensFresh();
+
       // 2. SCAN TIMELINE
       console.log('\n👁️  Scanning timeline...');
       await this.journal.updateStatus('scanning');

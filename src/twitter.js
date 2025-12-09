@@ -163,6 +163,45 @@ class BrickTwitter {
     }
   }
 
+  // Proactive token refresh - call this every cycle to keep tokens warm
+  // This prevents refresh token invalidation from inactivity
+  async keepTokensFresh() {
+    if (!this.supabase) return false;
+
+    try {
+      const tokens = await this.getTokensFromSupabase();
+      if (!tokens || !tokens.refreshToken) {
+        console.warn('⚠️ No refresh token available');
+        return false;
+      }
+
+      // Refresh if token is older than 1 hour (proactive, not waiting for expiry)
+      const tokenAge = Date.now() - (tokens.expiresAt - 2 * 60 * 60 * 1000); // expiresAt is 2hrs after creation
+      const oneHour = 60 * 60 * 1000;
+
+      if (tokenAge > oneHour) {
+        console.log('🔄 Proactively refreshing tokens (keeping them warm)...');
+        const newTokens = await this.refreshTokens(tokens.refreshToken);
+
+        if (newTokens) {
+          await this.saveTokensToSupabase(newTokens);
+          // Update the current client with new token
+          this.client = new TwitterApi(newTokens.accessToken);
+          console.log('✅ Tokens refreshed proactively');
+          return true;
+        } else {
+          console.warn('⚠️ Proactive refresh failed - tokens may expire soon');
+          return false;
+        }
+      }
+
+      return true; // Tokens still fresh
+    } catch (error) {
+      console.error('Error in proactive token refresh:', error.message);
+      return false;
+    }
+  }
+
   // === EYES: Reading ===
 
   async getTimeline(count = 20) {
