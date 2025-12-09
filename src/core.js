@@ -19,7 +19,7 @@ class BrickCore {
 
   // Load the constitution from markdown file
   loadConstitution() {
-    const constitutionPath = path.join(__dirname, '../../BRICK_SEED_CONSTITUTION.md');
+    const constitutionPath = path.join(__dirname, '../BRICK_SEED_CONSTITUTION.md');
 
     try {
       this.constitution = fs.readFileSync(constitutionPath, 'utf-8');
