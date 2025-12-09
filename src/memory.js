@@ -35,8 +35,16 @@ class BrickMemory {
     }
 
     try {
-      // Mem0 API expects messages as array and snake_case params
-      const messages = Array.isArray(content) ? content : [{ role: 'user', content }];
+      // Mem0 API expects messages as array with role/content objects
+      let messages;
+      if (Array.isArray(content)) {
+        messages = content;
+      } else if (typeof content === 'string') {
+        messages = [{ role: 'user', content: content }];
+      } else {
+        messages = [{ role: 'user', content: String(content) }];
+      }
+
       const result = await this.memory.add(messages, {
         user_id: this.userId,
         metadata: {
@@ -102,11 +110,18 @@ class BrickMemory {
     if (!this.memory) return [];
 
     try {
+      // Mem0 search requires query as first param, options as second
       const results = await this.memory.search(query, {
         user_id: this.userId,
-        limit
+        limit: limit
       });
-      return results || [];
+      // Handle both array and object responses
+      if (Array.isArray(results)) {
+        return results;
+      } else if (results?.results) {
+        return results.results;
+      }
+      return [];
     } catch (error) {
       console.error('Error searching memory:', error.message);
       return [];
@@ -118,10 +133,19 @@ class BrickMemory {
     if (!this.memory) return [];
 
     try {
+      // Mem0 getAll with explicit user_id
       const results = await this.memory.getAll({
-        user_id: this.userId
+        user_id: this.userId,
+        page: 1,
+        page_size: 100
       });
-      return results || [];
+      // Handle both array and object responses
+      if (Array.isArray(results)) {
+        return results;
+      } else if (results?.results) {
+        return results.results;
+      }
+      return [];
     } catch (error) {
       console.error('Error getting memories:', error.message);
       return [];
