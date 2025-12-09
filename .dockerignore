@@ -1,0 +1,33 @@
+# Dependencies
+node_modules
+
+# Development files
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+test*.js
+
+# Archive
+_archive_old_crypto_bot/
+
+# Local token files (tokens are in Supabase)
+persistent_tokens.json
+brick_preferences.json
+
+# Documentation (not needed in production)
+*.md
+!README.md

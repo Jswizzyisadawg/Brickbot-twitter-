@@ -1,7 +1,20 @@
-# Environment Variables
+# Environment Variables & Secrets
 .env
 .env.local
 .env.production
+.env.*
+
+# Token files (NEVER commit these!)
+persistent_tokens.json
+*_tokens.json
+credentials*.json
+
+# Preference files with potential secrets
+brick_preferences.json
+
+# Collected data
+collected_*.json
+*_training_content.json
 
 # Dependencies
 node_modules/

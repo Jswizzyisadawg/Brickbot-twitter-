@@ -1,0 +1,14 @@
+[build]
+# Use Dockerfile for building
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# No web server needed - Brick runs as a background worker
+numReplicas = 1
+healthcheckPath = ""
+restartPolicyType = "always"
+
+# Increase memory for Claude API calls and image processing
+[deploy.resources]
+memoryMB = 512
