@@ -78,8 +78,12 @@ class Brick {
       const timeline = await this.twitter.getTimeline(20);
       const mentions = await this.twitter.getMentions(10);
 
-      const allTweets = [...mentions, ...timeline];
-      console.log(`   Found ${allTweets.length} tweets to evaluate`);
+      // Filter out Brick's own tweets (don't talk to yourself!)
+      const myUsername = this.twitter.me?.data?.username || 'Brickthee';
+      const allTweets = [...mentions, ...timeline].filter(t =>
+        t.author.toLowerCase() !== myUsername.toLowerCase()
+      );
+      console.log(`   Found ${allTweets.length} tweets to evaluate (excluding own)`);
 
       // 3. EVALUATE EACH TWEET (with emotional processing)
       let engagements = [];
