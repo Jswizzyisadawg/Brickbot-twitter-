@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brick Garden</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --creme: #FBF7F0;
+      --ink: #2C2C2C;
+      --ink-light: #8A8A8A;
+      --ink-faint: #C5C0B8;
+
+      /* Rainbow */
+      --r1: #E07A5F;
+      --r2: #F2A65A;
+      --r3: #ECD444;
+      --r4: #81B29A;
+      --r5: #5E9FBF;
+      --r6: #9B7EC4;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--creme);
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--ink);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ===== GLASS TEXT - TWO LAYER SYSTEM ===== */
+    .intro-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      pointer-events: none;
+    }
+
+    .intro-text {
+      position: absolute;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: clamp(3.5rem, 14vw, 9rem);
+      text-align: center;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    /* ===== GLASS LAYER - SVG filter for real 3D bevel ===== */
+    .glass-layer {
+      /* Semi-transparent silver - lets you see through */
+      color: rgba(200, 198, 190, 0.85);
+
+      /* Apply the SVG glass filter */
+      filter: url(#glass-3d);
+
+      /* Additional text-shadow for extra depth */
+      text-shadow:
+        0 0 20px rgba(255, 255, 255, 0.4),
+        0 6px 15px rgba(50, 45, 35, 0.2);
+
+      opacity: 0;
+      transform: scale(1);
+      animation: glassFloat 4.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    /* Chrome shine sweep */
+    .glass-layer::before {
+      content: 'hello, brick welcomes you';
+      position: absolute;
+      top: 0;
+      left: 0;
+      font-family: inherit;
+      font-weight: inherit;
+      font-size: inherit;
+      letter-spacing: inherit;
+      line-height: inherit;
+      filter: none;
+
+      background: linear-gradient(
+        100deg,
+        transparent 0%,
+        transparent 38%,
+        rgba(255, 255, 255, 0.6) 44%,
+        rgba(255, 255, 255, 1) 50%,
+        rgba(255, 255, 255, 0.6) 56%,
+        transparent 62%,
+        transparent 100%
+      );
+      background-size: 300% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: none;
+
+      animation: chromeGlint 3.5s ease-in-out forwards;
+    }
+
+    @keyframes chromeGlint {
+      0% {
+        background-position: 130% center;
+        opacity: 0;
+      }
+      20% {
+        opacity: 1;
+      }
+      55% {
+        background-position: -30% center;
+        opacity: 1;
+      }
+      75%, 100% {
+        background-position: -60% center;
+        opacity: 0;
+      }
+    }
+
+    @keyframes glassFloat {
+      0% {
+        opacity: 0;
+        transform: scale(1) translateY(0);
+      }
+      15% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+      55% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(0.28) translateY(calc(-50vh + 45px));
+      }
+    }
+
+    /* Glass fades out after settling */
+    .glass-layer.fade-out {
+      animation: none;
+      transform: scale(0.28) translateY(calc(-50vh + 45px));
+      transition: opacity 1s ease;
+      opacity: 0 !important;
+    }
+
+    .glass-layer.fade-out::before { opacity: 0; }
+
+    /* ===== RAINBOW LAYER - Vibrant spectrum light ===== */
+    .rainbow-layer {
+      opacity: 0;
+      transform: scale(0.28) translateY(calc(-50vh + 45px));
+
+      /* VIBRANT RAINBOW: Purple → Pink → Orange → Gold */
+      background: linear-gradient(
+        90deg,
+        #7C3AED 0%,       /* Violet */
+        #A855F7 12%,      /* Purple */
+        #EC4899 28%,      /* Pink */
+        #F43F5E 42%,      /* Rose */
+        #F97316 58%,      /* Orange */
+        #EAB308 72%,      /* Gold */
+        #F97316 85%,      /* Orange */
+        #7C3AED 100%      /* Back to violet */
+      );
+      background-size: 300% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+
+      /* Glowing light effect */
+      text-shadow:
+        0 0 30px rgba(168, 85, 247, 0.7),
+        0 0 60px rgba(236, 72, 153, 0.5),
+        0 0 90px rgba(249, 115, 22, 0.4);
+
+      filter: saturate(1.2) brightness(1.05);
+      transition: opacity 1.5s ease;
+    }
+
+    .rainbow-layer.visible {
+      opacity: 1;
+    }
+
+    .rainbow-layer.breathing {
+      opacity: 1;
+      animation: rainbowPulse 6s ease-in-out infinite;
+    }
+
+    @keyframes rainbowPulse {
+      0%, 100% {
+        background-position: 0% center;
+        filter: saturate(1.2) brightness(1);
+        text-shadow:
+          0 0 25px rgba(168, 85, 247, 0.6),
+          0 0 50px rgba(236, 72, 153, 0.4),
+          0 0 75px rgba(249, 115, 22, 0.3);
+      }
+      50% {
+        background-position: 100% center;
+        filter: saturate(1.4) brightness(1.15);
+        text-shadow:
+          0 0 40px rgba(168, 85, 247, 0.8),
+          0 0 80px rgba(236, 72, 153, 0.6),
+          0 0 120px rgba(249, 115, 22, 0.5);
+      }
+    }
+
+
+    /* ===== RAINBOW ORB BUTTON ===== */
+    .control-orb {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      z-index: 100;
+
+      /* Rainbow glow */
+      background: conic-gradient(
+        from 0deg,
+        var(--r1),
+        var(--r2),
+        var(--r3),
+        var(--r4),
+        var(--r5),
+        var(--r6),
+        var(--r1)
+      );
+      box-shadow:
+        0 0 20px rgba(224, 122, 95, 0.4),
+        0 0 40px rgba(129, 178, 154, 0.3),
+        0 0 60px rgba(155, 126, 196, 0.2);
+
+      opacity: 0;
+      transform: scale(0.5);
+      animation: orbAppear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 4.5s forwards, orbPulse 3s ease-in-out 5s infinite;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .control-orb::before {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      background: var(--creme);
+      border-radius: 50%;
+    }
+
+    .control-orb::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 8px;
+      height: 8px;
+      background: conic-gradient(
+        from 0deg,
+        var(--r1),
+        var(--r2),
+        var(--r3),
+        var(--r4),
+        var(--r5),
+        var(--r6),
+        var(--r1)
+      );
+      border-radius: 50%;
+      animation: orbSpin 4s linear infinite;
+    }
+
+    @keyframes orbAppear {
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    @keyframes orbPulse {
+      0%, 100% {
+        box-shadow:
+          0 0 20px rgba(224, 122, 95, 0.4),
+          0 0 40px rgba(129, 178, 154, 0.3),
+          0 0 60px rgba(155, 126, 196, 0.2);
+      }
+      50% {
+        box-shadow:
+          0 0 30px rgba(224, 122, 95, 0.6),
+          0 0 60px rgba(129, 178, 154, 0.4),
+          0 0 80px rgba(155, 126, 196, 0.3);
+      }
+    }
+
+    @keyframes orbSpin {
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    .control-orb:hover {
+      transform: scale(1.15);
+      box-shadow:
+        0 0 40px rgba(224, 122, 95, 0.7),
+        0 0 70px rgba(129, 178, 154, 0.5),
+        0 0 100px rgba(155, 126, 196, 0.4);
+    }
+
+    /* ===== MENU ===== */
+    .menu-panel {
+      position: fixed;
+      top: 80px;
+      right: 24px;
+      background: rgba(44, 44, 44, 0.95);
+      backdrop-filter: blur(20px);
+      border-radius: 14px;
+      padding: 6px;
+      z-index: 100;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px) scale(0.95);
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .menu-panel.open {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+    }
+
+    .menu-item {
+      display: block;
+      width: 100%;
+      padding: 12px 20px;
+      background: transparent;
+      border: none;
+      border-radius: 10px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 300;
+      color: rgba(255, 255, 255, 0.5);
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s ease;
+    }
+
+    .menu-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    /* ===== LOG PAD ===== */
+    .log-container {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 130px 24px 60px;
+      opacity: 0;
+      animation: fadeUp 0.8s ease 4.8s forwards;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .log-pad {
+      position: relative;
+    }
+
+    .log-pad::before {
+      content: '';
+      position: absolute;
+      top: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--ink-faint), transparent);
+      border-radius: 1px;
+    }
+
+    .log-entry {
+      display: grid;
+      grid-template-columns: 50px 1fr;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+      opacity: 0;
+      transform: translateY(10px);
+      animation: entryAppear 0.4s ease forwards;
+    }
+
+    .log-entry:last-child { border-bottom: none; }
+
+    @keyframes entryAppear {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .log-time {
+      font-size: 0.6rem;
+      color: var(--ink-faint);
+      padding-top: 3px;
+    }
+
+    .log-content {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .log-type {
+      font-size: 0.55rem;
+      font-weight: 400;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .log-type.spark { color: var(--r2); }
+    .log-type.engage { color: var(--r4); }
+    .log-type.insight { color: var(--r6); }
+    .log-type.follow { color: var(--r5); }
+    .log-type.create { color: var(--r1); }
+
+    .log-text {
+      font-size: 0.82rem;
+      font-weight: 300;
+      line-height: 1.5;
+      color: var(--ink);
+    }
+
+    .log-meta {
+      font-size: 0.65rem;
+      color: var(--ink-light);
+    }
+
+    .log-empty {
+      text-align: center;
+      padding: 50px 20px;
+      font-size: 0.75rem;
+      color: var(--ink-faint);
+    }
+
+    /* ===== OVERLAY ===== */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--creme);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.4s ease;
+    }
+
+    .overlay.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .overlay-close {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      width: 40px;
+      height: 40px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      opacity: 0.3;
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay-close:hover { opacity: 0.8; }
+
+    .overlay-close::before,
+    .overlay-close::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 18px;
+      height: 1.5px;
+      background: var(--ink);
+    }
+
+    .overlay-close::before { transform: translate(-50%, -50%) rotate(45deg); }
+    .overlay-close::after { transform: translate(-50%, -50%) rotate(-45deg); }
+
+    .overlay-title {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: clamp(2.5rem, 10vw, 6rem);
+      text-align: center;
+
+      color: transparent;
+      -webkit-text-stroke: 2px rgba(180, 175, 165, 0.35);
+      text-shadow:
+        -2px -2px 0 rgba(255, 255, 255, 0.6),
+        0 0 30px rgba(255, 255, 255, 0.3),
+        2px 2px 4px rgba(170, 160, 145, 0.25);
+
+      opacity: 0;
+      transition: all 2s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .overlay.open .overlay-title {
+      opacity: 1;
+      animation: overlayTitleAnim 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    @keyframes overlayTitleAnim {
+      0% {
+        transform: translate(-50%, -50%) scale(1);
+        -webkit-text-stroke: 2px rgba(180, 175, 165, 0.35);
+      }
+      100% {
+        transform: translate(-50%, calc(-50vh + 50px)) scale(0.35);
+        -webkit-text-stroke: 0;
+        background: linear-gradient(90deg, var(--r1), var(--r2), var(--r3), var(--r4), var(--r5), var(--r6), var(--r1));
+        background-size: 300% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        text-shadow: none;
+      }
+    }
+
+    .overlay-content {
+      width: 100%;
+      max-width: 400px;
+      padding: 20px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.5s ease 1.8s;
+    }
+
+    .overlay.open .overlay-content {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Passcode */
+    .passcode-wrapper { text-align: center; }
+
+    .passcode-label {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--ink-faint);
+      margin-bottom: 20px;
+    }
+
+    .passcode-input {
+      width: 150px;
+      padding: 14px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 1.3rem;
+      text-align: center;
+      letter-spacing: 10px;
+      border: 1.5px solid var(--ink-faint);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ink);
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .passcode-input:focus { border-color: var(--ink-light); }
+
+    .passcode-input.error {
+      border-color: var(--r1);
+      animation: shake 0.4s ease;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); }
+      40% { transform: translateX(8px); }
+      60% { transform: translateX(-5px); }
+      80% { transform: translateX(5px); }
+    }
+
+    /* Decision */
+    .decision-wrapper { text-align: center; display: none; }
+    .decision-wrapper.active { display: block; }
+
+    .decision-label {
+      font-size: 0.55rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--ink-faint);
+      margin-bottom: 18px;
+    }
+
+    .decision-text {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 400;
+      line-height: 1.5;
+      color: var(--ink);
+      margin-bottom: 8px;
+    }
+
+    .decision-meta {
+      font-size: 0.7rem;
+      color: var(--ink-light);
+      margin-bottom: 35px;
+    }
+
+    .decision-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 35px;
+    }
+
+    .btn-decision {
+      width: 75px;
+      height: 75px;
+      border-radius: 50%;
+      border: 1.5px solid var(--ink-faint);
+      background: transparent;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6rem;
+      color: var(--ink-light);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-decision:hover { transform: scale(1.08); }
+    .btn-no:hover { border-color: var(--r1); color: var(--r1); }
+    .btn-yes:hover { border-color: var(--r4); color: var(--r4); }
+
+    .decision-queue {
+      margin-top: 25px;
+      font-size: 0.6rem;
+      color: var(--ink-faint);
+    }
+
+    .decision-empty {
+      font-size: 0.8rem;
+      color: var(--ink-faint);
+    }
+
+    /* Other views */
+    .learnings-wrapper, .export-wrapper { display: none; }
+    .learnings-wrapper.active, .export-wrapper.active { display: block; }
+
+    .view-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: none;
+      border: none;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--ink-light);
+      cursor: pointer;
+      margin-bottom: 25px;
+      padding: 0;
+    }
+
+    .view-back:hover { color: var(--ink); }
+    .view-back::before { content: '←'; }
+
+    .learnings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .learning-tile {
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.02);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .learning-tile:hover { background: rgba(0, 0, 0, 0.04); }
+
+    .learning-title {
+      font-size: 0.75rem;
+      color: var(--ink);
+      margin-bottom: 3px;
+    }
+
+    .learning-count {
+      font-size: 0.6rem;
+      color: var(--ink-light);
+    }
+
+    .export-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .export-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(0, 0, 0, 0.02);
+      border: none;
+      border-radius: 8px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--ink);
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.2s ease;
+    }
+
+    .export-item:hover { background: rgba(0, 0, 0, 0.04); }
+    .export-item::after { content: '↓'; color: var(--ink-light); }
+  </style>
+</head>
+<body>
+  <!-- SVG FILTER FOR GLASS BEVEL EFFECT -->
+  <svg width="0" height="0" style="position: absolute;">
+    <defs>
+      <!-- Glass/Chrome Bevel Filter -->
+      <filter id="glass-bevel" x="-50%" y="-50%" width="200%" height="200%">
+        <!-- Create slight thickness -->
+        <feMorphology operator="dilate" radius="1" in="SourceAlpha" result="thick"/>
+
+        <!-- Blur for soft edges -->
+        <feGaussianBlur in="thick" stdDeviation="1" result="blur"/>
+
+        <!-- Specular lighting - creates the 3D chrome shine -->
+        <feSpecularLighting in="blur" surfaceScale="5" specularConstant="1.2" specularExponent="20" lighting-color="#ffffff" result="specular">
+          <fePointLight x="-100" y="-200" z="400"/>
+        </feSpecularLighting>
+
+        <!-- Composite specular with source -->
+        <feComposite in="specular" in2="SourceAlpha" operator="in" result="specular-cut"/>
+
+        <!-- Blend with original -->
+        <feMerge>
+          <feMergeNode in="SourceGraphic"/>
+          <feMergeNode in="specular-cut"/>
+        </feMerge>
+      </filter>
+
+      <!-- Stronger 3D Glass Effect -->
+      <filter id="glass-3d" x="-50%" y="-50%" width="200%" height="200%">
+        <!-- Emboss/bevel effect -->
+        <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+
+        <!-- Top-left highlight -->
+        <feOffset in="blur" dx="-3" dy="-3" result="offset-top"/>
+        <feFlood flood-color="#ffffff" flood-opacity="0.9"/>
+        <feComposite in2="offset-top" operator="in" result="highlight"/>
+
+        <!-- Bottom-right shadow -->
+        <feOffset in="blur" dx="3" dy="3" result="offset-bottom"/>
+        <feFlood flood-color="#666655" flood-opacity="0.8"/>
+        <feComposite in2="offset-bottom" operator="in" result="shadow"/>
+
+        <!-- Combine everything -->
+        <feMerge>
+          <feMergeNode in="shadow"/>
+          <feMergeNode in="SourceGraphic"/>
+          <feMergeNode in="highlight"/>
+        </feMerge>
+      </filter>
+    </defs>
+  </svg>
+
+  <div class="intro-container">
+    <!-- Glass layer (fades out) -->
+    <h1 class="intro-text glass-layer" id="glass-layer">hello, brick welcomes you</h1>
+    <!-- Rainbow layer (fades in) -->
+    <h1 class="intro-text rainbow-layer" id="rainbow-layer">hello, brick welcomes you</h1>
+  </div>
+
+  <button class="control-orb" id="control-orb" aria-label="Menu"></button>
+
+  <div class="menu-panel" id="menu-panel">
+    <button class="menu-item" data-view="gardener">gardener</button>
+    <button class="menu-item" data-view="learnings">learnings</button>
+    <button class="menu-item" data-view="export">export</button>
+  </div>
+
+  <main class="log-container">
+    <div class="log-pad" id="log-pad">
+      <div class="log-empty">brick is thinking...</div>
+    </div>
+  </main>
+
+  <div class="overlay" id="overlay">
+    <button class="overlay-close" id="overlay-close" aria-label="Close"></button>
+    <h2 class="overlay-title" id="overlay-title">gardener</h2>
+    <div class="overlay-content">
+      <div class="passcode-wrapper" id="passcode-wrapper">
+        <div class="passcode-label">enter passcode</div>
+        <input type="password" class="passcode-input" id="passcode-input" maxlength="4" autocomplete="off">
+      </div>
+      <div class="decision-wrapper" id="decision-wrapper">
+        <div id="decision-container"><div class="decision-empty">nothing to decide</div></div>
+      </div>
+      <div class="learnings-wrapper" id="learnings-wrapper">
+        <button class="view-back" id="back-learnings">back</button>
+        <div class="learnings-grid">
+          <div class="learning-tile"><div class="learning-title">relationships</div><div class="learning-count" id="count-relationships">0</div></div>
+          <div class="learning-tile"><div class="learning-title">ai insights</div><div class="learning-count" id="count-insights">0</div></div>
+          <div class="learning-tile"><div class="learning-title">patterns</div><div class="learning-count" id="count-patterns">0</div></div>
+          <div class="learning-tile"><div class="learning-title">sparks</div><div class="learning-count" id="count-sparks">0</div></div>
+        </div>
+      </div>
+      <div class="export-wrapper" id="export-wrapper">
+        <button class="view-back" id="back-export">back</button>
+        <div class="export-list">
+          <button class="export-item" data-export="relationships">relationships</button>
+          <button class="export-item" data-export="insights">ai insights</button>
+          <button class="export-item" data-export="all">everything</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const GARDENER_PASSCODE = '1234';
+
+    let pendingDecisions = [];
+    let isUnlocked = false;
+
+    const glassLayer = document.getElementById('glass-layer');
+    const rainbowLayer = document.getElementById('rainbow-layer');
+    const controlOrb = document.getElementById('control-orb');
+    const menuPanel = document.getElementById('menu-panel');
+    const overlay = document.getElementById('overlay');
+    const overlayClose = document.getElementById('overlay-close');
+    const overlayTitle = document.getElementById('overlay-title');
+    const passcodeInput = document.getElementById('passcode-input');
+
+    // After glass floats up and settles (4.5s), crossfade to rainbow
+    setTimeout(() => {
+      // Fade out glass
+      glassLayer.classList.add('fade-out');
+      // Fade in rainbow
+      rainbowLayer.classList.add('visible');
+
+      // After crossfade (1.2s), start breathing
+      setTimeout(() => {
+        rainbowLayer.classList.add('breathing');
+      }, 1300);
+    }, 4600);
+
+    // Menu
+    controlOrb.addEventListener('click', e => {
+      e.stopPropagation();
+      menuPanel.classList.toggle('open');
+    });
+
+    document.addEventListener('click', e => {
+      if (!menuPanel.contains(e.target) && !controlOrb.contains(e.target)) {
+        menuPanel.classList.remove('open');
+      }
+    });
+
+    document.querySelectorAll('.menu-item').forEach(item => {
+      item.addEventListener('click', () => {
+        menuPanel.classList.remove('open');
+        openOverlay(item.dataset.view);
+      });
+    });
+
+    function openOverlay(view) {
+      document.querySelectorAll('.passcode-wrapper, .decision-wrapper, .learnings-wrapper, .export-wrapper')
+        .forEach(w => w.classList.remove('active'));
+
+      overlayTitle.textContent = view;
+
+      if (view === 'gardener') {
+        if (isUnlocked) {
+          document.getElementById('decision-wrapper').classList.add('active');
+          renderDecision();
+        } else {
+          document.getElementById('passcode-wrapper').classList.add('active');
+          setTimeout(() => passcodeInput.focus(), 600);
+        }
+      } else if (view === 'learnings') {
+        document.getElementById('learnings-wrapper').classList.add('active');
+      } else if (view === 'export') {
+        document.getElementById('export-wrapper').classList.add('active');
+      }
+
+      overlay.classList.add('open');
+    }
+
+    function closeOverlay() {
+      overlay.classList.remove('open');
+      passcodeInput.value = '';
+    }
+
+    overlayClose.addEventListener('click', closeOverlay);
+    document.getElementById('back-learnings').addEventListener('click', closeOverlay);
+    document.getElementById('back-export').addEventListener('click', closeOverlay);
+
+    passcodeInput.addEventListener('input', () => {
+      if (passcodeInput.value.length === 4) {
+        if (passcodeInput.value === GARDENER_PASSCODE) {
+          isUnlocked = true;
+          passcodeInput.value = '';
+          document.getElementById('passcode-wrapper').classList.remove('active');
+          document.getElementById('decision-wrapper').classList.add('active');
+          renderDecision();
+        } else {
+          passcodeInput.classList.add('error');
+          setTimeout(() => { passcodeInput.classList.remove('error'); passcodeInput.value = ''; }, 400);
+        }
+      }
+    });
+
+    function renderDecision() {
+      const container = document.getElementById('decision-container');
+      if (pendingDecisions.length === 0) {
+        container.innerHTML = '<div class="decision-empty">nothing to decide</div>';
+        return;
+      }
+      const d = pendingDecisions[0];
+      const remaining = pendingDecisions.length - 1;
+      container.innerHTML = `
+        <div class="decision-label">${d.type}</div>
+        <div class="decision-text">${d.content}</div>
+        <div class="decision-meta">${d.meta || ''}</div>
+        <div class="decision-buttons">
+          <button class="btn-decision btn-no" onclick="handleDecision('no')">no</button>
+          <button class="btn-decision btn-yes" onclick="handleDecision('yes')">yes</button>
+        </div>
+        ${remaining > 0 ? `<div class="decision-queue">${remaining} more</div>` : ''}
+      `;
+    }
+
+    async function handleDecision(choice) {
+      const d = pendingDecisions[0];
+      try {
+        let table, update;
+        if (d.source === 'draft') { table = 'draft_queue'; update = choice === 'yes' ? { status: 'approved' } : { status: 'rejected' }; }
+        else if (d.source === 'spark') { table = 'spark_queue'; update = choice === 'yes' ? { status: 'claimed' } : { status: 'archived' }; }
+        else if (d.source === 'insight') { table = 'ai_interface_insights'; update = choice === 'yes' ? { confidence: 1.0 } : { confidence: 0 }; }
+
+        if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+          await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${d.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+            body: JSON.stringify(update)
+          });
+        }
+        pendingDecisions.shift();
+        renderDecision();
+      } catch (err) { console.error(err); }
+    }
+
+    function renderLog(logs) {
+      const pad = document.getElementById('log-pad');
+      if (!logs || logs.length === 0) {
+        pad.innerHTML = '<div class="log-empty">brick is thinking...</div>';
+        return;
+      }
+      pad.innerHTML = logs.map((log, i) => {
+        let type = 'engage';
+        const et = (log.event_type || '').toLowerCase();
+        if (et.includes('spark') || et.includes('curious')) type = 'spark';
+        if (et.includes('insight') || et.includes('learn')) type = 'insight';
+        if (et.includes('follow')) type = 'follow';
+        if (et.includes('create') || et.includes('draft')) type = 'create';
+        const time = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `
+          <div class="log-entry" style="animation-delay: ${5 + i * 0.1}s">
+            <div class="log-time">${time}</div>
+            <div class="log-content">
+              <div class="log-type ${type}">${log.event_type || 'thought'}</div>
+              <div class="log-text">${log.brick_action || log.reasoning || 'processing...'}</div>
+              ${log.target_user ? `<div class="log-meta">@${log.target_user}</div>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    document.querySelectorAll('.export-item').forEach(btn => {
+      btn.addEventListener('click', () => exportData(btn.dataset.export));
+    });
+
+    async function exportData(type) {
+      if (SUPABASE_URL === 'YOUR_SUPABASE_URL') { alert('Connect Supabase first'); return; }
+      try {
+        let data = {};
+        const headers = { 'apikey': SUPABASE_ANON_KEY };
+        if (type === 'relationships' || type === 'all') { const res = await fetch(`${SUPABASE_URL}/rest/v1/relationships`, { headers }); data.relationships = await res.json(); }
+        if (type === 'insights' || type === 'all') { const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_interface_insights`, { headers }); data.ai_insights = await res.json(); }
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `brick-${type}-${new Date().toISOString().split('T')[0]}.json`; a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) { console.error(err); }
+    }
+
+    async function loadData() {
+      if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+        renderLog([{ event_type: 'waiting', brick_action: 'connect supabase to see brick\'s thoughts', timestamp: new Date() }]);
+        return;
+      }
+      try {
+        const logsRes = await fetch(`${SUPABASE_URL}/rest/v1/brick_log?order=timestamp.desc&limit=10`, { headers: { 'apikey': SUPABASE_ANON_KEY } });
+        const logs = await logsRes.json();
+        renderLog(logs);
+
+        const [draftsRes, sparksRes, insightsRes] = await Promise.all([
+          fetch(`${SUPABASE_URL}/rest/v1/draft_queue?status=eq.ready`, { headers: { 'apikey': SUPABASE_ANON_KEY } }),
+          fetch(`${SUPABASE_URL}/rest/v1/spark_queue?status=eq.fresh&limit=5`, { headers: { 'apikey': SUPABASE_ANON_KEY } }),
+          fetch(`${SUPABASE_URL}/rest/v1/ai_interface_insights?confidence=lt.0.7&limit=5`, { headers: { 'apikey': SUPABASE_ANON_KEY } })
+        ]);
+
+        const drafts = await draftsRes.json();
+        const sparks = await sparksRes.json();
+        const insights = await insightsRes.json();
+
+        pendingDecisions = [
+          ...drafts.map(d => ({ id: d.id, type: 'post this?', content: d.content, meta: d.emotional_angle, source: 'draft' })),
+          ...sparks.map(s => ({ id: s.id, type: 'keep spark?', content: s.content, meta: s.spark_type, source: 'spark' })),
+          ...insights.map(i => ({ id: i.id, type: 'trust insight?', content: i.content, meta: i.insight_type, source: 'insight' }))
+        ];
+
+        const counts = await Promise.all([
+          fetch(`${SUPABASE_URL}/rest/v1/relationships?select=id`, { headers: { 'apikey': SUPABASE_ANON_KEY } }),
+          fetch(`${SUPABASE_URL}/rest/v1/ai_interface_insights?select=id`, { headers: { 'apikey': SUPABASE_ANON_KEY } }),
+          fetch(`${SUPABASE_URL}/rest/v1/pattern_library?select=id`, { headers: { 'apikey': SUPABASE_ANON_KEY } }),
+          fetch(`${SUPABASE_URL}/rest/v1/spark_queue?select=id`, { headers: { 'apikey': SUPABASE_ANON_KEY } })
+        ]);
+
+        const [rels, ins, patts, spks] = await Promise.all(counts.map(r => r.json()));
+        document.getElementById('count-relationships').textContent = rels.length;
+        document.getElementById('count-insights').textContent = ins.length;
+        document.getElementById('count-patterns').textContent = patts.length;
+        document.getElementById('count-sparks').textContent = spks.length;
+      } catch (err) { console.error('Load failed:', err); }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadData);
+  </script>
+</body>
+</html>

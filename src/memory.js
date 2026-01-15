@@ -105,25 +105,84 @@ class BrickMemory {
     );
   }
 
-  // Search memories
+  // Calculate recency score (exponential decay)
+  // Memories from today = 1.0, memories from a week ago ≈ 0.5, month ago ≈ 0.1
+  calculateRecencyScore(timestamp) {
+    if (!timestamp) return 0.5; // Default for memories without timestamps
+
+    const now = Date.now();
+    const memoryTime = new Date(timestamp).getTime();
+    const ageInDays = (now - memoryTime) / (1000 * 60 * 60 * 24);
+
+    // Decay factor: 0.9^days (half-life ~7 days)
+    const decayRate = 0.9;
+    return Math.pow(decayRate, ageInDays);
+  }
+
+  // Search memories with recency weighting
   async recall(query, limit = 10) {
     if (!this.memory) return [];
 
     try {
       // Mem0 search requires query as first param, options as second
+      // Request more than needed so we can re-rank
       const results = await this.memory.search(query, {
         user_id: this.userId,
-        limit: limit
+        limit: limit * 2
       });
+
       // Handle both array and object responses
+      let memories = [];
       if (Array.isArray(results)) {
-        return results;
+        memories = results;
       } else if (results?.results) {
-        return results.results;
+        memories = results.results;
       }
-      return [];
+
+      // Add recency scoring and re-rank
+      const scoredMemories = memories.map(m => {
+        const recency = this.calculateRecencyScore(m.metadata?.timestamp);
+        const relevance = m.score || 0.5; // Mem0's relevance score
+
+        return {
+          ...m,
+          recencyScore: recency,
+          relevanceScore: relevance,
+          // Combined score: 70% relevance, 30% recency
+          combinedScore: (relevance * 0.7) + (recency * 0.3)
+        };
+      });
+
+      // Sort by combined score and return top results
+      return scoredMemories
+        .sort((a, b) => b.combinedScore - a.combinedScore)
+        .slice(0, limit);
+
     } catch (error) {
       console.error('Error searching memory:', error.message);
+      return [];
+    }
+  }
+
+  // Recall with pure recency (for "what did I do recently?" queries)
+  async recallRecent(limit = 10) {
+    if (!this.memory) return [];
+
+    try {
+      const allMemories = await this.getAllMemories();
+
+      // Sort by timestamp (most recent first)
+      return allMemories
+        .filter(m => m.metadata?.timestamp)
+        .sort((a, b) => {
+          const timeA = new Date(a.metadata.timestamp).getTime();
+          const timeB = new Date(b.metadata.timestamp).getTime();
+          return timeB - timeA;
+        })
+        .slice(0, limit);
+
+    } catch (error) {
+      console.error('Error getting recent memories:', error.message);
       return [];
     }
   }
@@ -167,6 +226,85 @@ class BrickMemory {
       postsMade: posts.length,
       memories
     };
+  }
+
+  // Get memory health stats (for monitoring)
+  async getMemoryHealth() {
+    const memories = await this.getAllMemories();
+
+    if (memories.length === 0) {
+      return {
+        total: 0,
+        status: 'empty',
+        message: 'No memories stored yet'
+      };
+    }
+
+    // Calculate age distribution
+    const now = Date.now();
+    const ages = memories
+      .filter(m => m.metadata?.timestamp)
+      .map(m => (now - new Date(m.metadata.timestamp).getTime()) / (1000 * 60 * 60 * 24));
+
+    const avgAge = ages.length > 0 ? ages.reduce((a, b) => a + b, 0) / ages.length : 0;
+    const maxAge = ages.length > 0 ? Math.max(...ages) : 0;
+
+    // Count by type
+    const byType = {};
+    for (const m of memories) {
+      const type = m.metadata?.type || 'unknown';
+      byType[type] = (byType[type] || 0) + 1;
+    }
+
+    // Calculate overall recency health
+    const avgRecency = memories
+      .map(m => this.calculateRecencyScore(m.metadata?.timestamp))
+      .reduce((a, b) => a + b, 0) / memories.length;
+
+    // Determine status
+    let status = 'healthy';
+    let message = 'Memory is fresh and active';
+
+    if (avgRecency < 0.3) {
+      status = 'stale';
+      message = 'Many memories are old - consider more active engagement';
+    } else if (memories.length > 500) {
+      status = 'bloated';
+      message = 'Memory is getting large - consider pruning old entries';
+    }
+
+    return {
+      total: memories.length,
+      byType,
+      avgAgeDays: Math.round(avgAge * 10) / 10,
+      maxAgeDays: Math.round(maxAge * 10) / 10,
+      avgRecencyScore: Math.round(avgRecency * 100) / 100,
+      status,
+      message
+    };
+  }
+
+  // Format memories for injection into prompts (with recency indication)
+  formatForPrompt(memories, maxLength = 1500) {
+    if (!memories || memories.length === 0) {
+      return '';
+    }
+
+    let output = '\n--- RELEVANT MEMORIES ---\n';
+    let currentLength = output.length;
+
+    for (const m of memories) {
+      const recencyLabel = m.recencyScore > 0.7 ? '(recent)' : m.recencyScore < 0.3 ? '(older)' : '';
+      const entry = `• ${m.memory} ${recencyLabel}\n`;
+
+      if (currentLength + entry.length > maxLength) break;
+
+      output += entry;
+      currentLength += entry.length;
+    }
+
+    output += '--- END MEMORIES ---\n';
+    return output;
   }
 }
 

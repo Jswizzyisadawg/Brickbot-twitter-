@@ -3,6 +3,10 @@
 
 class BrickDiscovery {
   constructor() {
+    // Brick's own username (set during discover() from twitter.me)
+    this.myUsername = null;
+    this.myUserId = null;
+
     // Brick's domains of curiosity
     this.searchTopics = [
       // Core interests
@@ -214,10 +218,44 @@ class BrickDiscovery {
     return `${topic} -is:retweet -is:reply lang:en`;
   }
 
+  // Check if a tweet is from Brick (to avoid self-replies)
+  isOwnTweet(tweet) {
+    if (!tweet) return false;
+
+    // Check by username
+    if (this.myUsername && tweet.author) {
+      if (tweet.author.toLowerCase() === this.myUsername.toLowerCase()) {
+        return true;
+      }
+    }
+
+    // Check by user ID
+    if (this.myUserId && tweet.authorId) {
+      if (tweet.authorId === this.myUserId) {
+        return true;
+      }
+    }
+
+    // Fallback: check for common Brick usernames
+    const brickUsernames = ['brickthee', 'brick', 'brick_ai'];
+    if (tweet.author && brickUsernames.includes(tweet.author.toLowerCase())) {
+      return true;
+    }
+
+    return false;
+  }
+
   // Discover new content and people
   async discover(twitter, core, emotions) {
     console.log('\n🔍 DISCOVERY MODE');
     console.log('─'.repeat(40));
+
+    // Get Brick's own identity to avoid self-replies
+    if (twitter.me?.data) {
+      this.myUsername = twitter.me.data.username;
+      this.myUserId = twitter.me.data.id;
+      console.log(`   🆔 Identity: @${this.myUsername} (${this.myUserId})`);
+    }
 
     const discoveries = {
       tweetsFound: [],
@@ -248,6 +286,12 @@ class BrickDiscovery {
           // Skip if we've seen this tweet or user
           if (this.seenTweets.has(tweet.id)) continue;
           if (this.seenUsers.has(tweet.authorId)) continue;
+
+          // CRITICAL: Skip our own tweets!
+          if (this.isOwnTweet(tweet)) {
+            console.log(`      ⏭️  Skipping own tweet`);
+            continue;
+          }
 
           this.seenTweets.add(tweet.id);
           this.seenUsers.add(tweet.authorId);

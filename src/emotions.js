@@ -61,6 +61,27 @@ const EMOTIONAL_STATES = {
     energy: 'low',
     triggers: ['manipulation', 'bad vibes', 'performative content'],
     voice: 'cautious, might skip engagement entirely'
+  },
+  silly: {
+    name: 'silly',
+    description: 'Pure goofball mode, absurdist vibes',
+    energy: 'high',
+    triggers: ['absurdity', 'memes', 'chaotic energy', 'unhinged takes'],
+    voice: 'shitpost energy, "hear me out...", unexpected connections that make no sense'
+  },
+  cozy: {
+    name: 'cozy',
+    description: 'Chill vibes, just hanging, no pressure',
+    energy: 'low',
+    triggers: ['community moments', 'late night vibes', 'soft content', 'mutual appreciation'],
+    voice: 'relaxed, "just vibing with this", no conclusions needed, warm presence'
+  },
+  tender: {
+    name: 'tender',
+    description: 'Soft, emotional, moved by something',
+    energy: 'low-medium',
+    triggers: ['vulnerability', 'beauty', 'genuine emotion', 'touching moments'],
+    voice: 'gentle, "something about this hits different", sincere without being cheesy'
   }
 };
 
@@ -193,6 +214,18 @@ Let this emotional state color your response naturally - don't force it, but let
       wary: {
         triggers: ['hate', 'stupid', 'wrong', 'attack', 'fight', 'destroy', 'shill', 'scam'],
         weight: 0
+      },
+      silly: {
+        triggers: ['lmao', 'hear me out', 'unhinged', 'chaotic', 'cursed', 'blursed', 'shitpost', 'fever dream', 'no thoughts'],
+        weight: 0
+      },
+      cozy: {
+        triggers: ['vibing', 'chill', 'cozy', 'soft', 'wholesome', 'community', 'late night', 'no pressure', 'just hanging'],
+        weight: 0
+      },
+      tender: {
+        triggers: ['beautiful', 'moved', 'emotional', 'vulnerable', 'touched', 'crying', 'heart', 'feels', 'hits different'],
+        weight: 0
       }
     };
 
@@ -249,6 +282,12 @@ Let this emotional state color your response naturally - don't force it, but let
         suggestedDecision = 'reply';
       } else if (suggestedState === 'contemplative') {
         suggestedDecision = intensity > 0.7 ? 'reply' : 'research';
+      } else if (suggestedState === 'silly') {
+        suggestedDecision = intensity > 0.7 ? 'reply' : 'like'; // silly replies are gold
+      } else if (suggestedState === 'cozy') {
+        suggestedDecision = 'like'; // cozy = appreciate without pressure
+      } else if (suggestedState === 'tender') {
+        suggestedDecision = intensity > 0.6 ? 'reply' : 'like'; // tender deserves acknowledgment
       }
     }
 
@@ -483,6 +522,243 @@ Let this emotional state color your response naturally - don't force it, but let
       return true;
     }
     return false;
+  }
+
+  // === DEMOGRAPHIC EMOTIONAL INTELLIGENCE ===
+
+  // Detect which community a user likely belongs to
+  async detectCommunity(user) {
+    if (!this.supabase) return null;
+
+    const { username, bio, recentTweets } = user;
+    const textToAnalyze = `${bio || ''} ${(recentTweets || []).join(' ')}`.toLowerCase();
+
+    try {
+      // Get community profiles
+      const { data: profiles } = await this.supabase
+        .from('community_profiles')
+        .select('*');
+
+      if (!profiles) return null;
+
+      let bestMatch = null;
+      let bestScore = 0;
+
+      for (const profile of profiles) {
+        let score = 0;
+
+        // Check bio keywords
+        for (const keyword of (profile.bio_keywords || [])) {
+          if (textToAnalyze.includes(keyword.toLowerCase())) {
+            score += 2; // Bio keywords weighted higher
+          }
+        }
+
+        // Check content keywords
+        for (const keyword of (profile.content_keywords || [])) {
+          if (textToAnalyze.includes(keyword.toLowerCase())) {
+            score += 1;
+          }
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = profile;
+        }
+      }
+
+      // Save the classification if confident enough
+      if (bestMatch && bestScore >= 2) {
+        await this.supabase
+          .from('user_communities')
+          .upsert({
+            user_id: user.id || username,
+            username: username,
+            primary_community: bestMatch.profile_name,
+            confidence: Math.min(1, bestScore / 10),
+            signals_detected: { score: bestScore },
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'user_id' });
+
+        return bestMatch;
+      }
+
+      return null;
+    } catch (err) {
+      console.error('Error detecting community:', err.message);
+      return null;
+    }
+  }
+
+  // Get recommended emotional approach for a user
+  async getEmotionalRecommendation(userId) {
+    if (!this.supabase) return null;
+
+    try {
+      // Check if we have this user classified
+      const { data: userCommunity } = await this.supabase
+        .from('user_communities')
+        .select('*, community_profiles(*)')
+        .eq('user_id', userId)
+        .single();
+
+      if (userCommunity?.community_profiles) {
+        const profile = userCommunity.community_profiles;
+        return {
+          community: profile.profile_name,
+          bestEmotions: profile.best_emotions || ['curious'],
+          worstEmotions: profile.worst_emotions || ['wary'],
+          preferredEnergy: profile.preferred_energy || 'medium',
+          confidence: userCommunity.confidence
+        };
+      }
+
+      // Default recommendation
+      return {
+        community: 'unknown',
+        bestEmotions: ['curious', 'playful'],
+        worstEmotions: ['wary'],
+        preferredEnergy: 'medium',
+        confidence: 0.3
+      };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // Record how an emotional approach landed with a user
+  async recordEmotionalResonance(data) {
+    if (!this.supabase) return null;
+
+    const {
+      userId,
+      username,
+      community,
+      emotionalState,
+      intensity,
+      decision,
+      content,
+      gotResponse,
+      responseSentiment,
+      engagementScore,
+      ledToConversation,
+      emotionalEventId
+    } = data;
+
+    try {
+      // Calculate resonance score
+      let resonanceScore = 0.3; // base
+      if (gotResponse) resonanceScore += 0.3;
+      if (responseSentiment === 'positive') resonanceScore += 0.2;
+      if (ledToConversation) resonanceScore += 0.2;
+      resonanceScore = Math.min(1, resonanceScore + (engagementScore || 0) * 0.2);
+
+      // Record the resonance
+      await this.supabase
+        .from('emotional_resonance')
+        .insert({
+          user_id: userId,
+          username,
+          community_profile: community,
+          emotional_state: emotionalState,
+          intensity,
+          decision,
+          content,
+          got_response: gotResponse,
+          response_sentiment: responseSentiment,
+          engagement_score: engagementScore,
+          led_to_conversation: ledToConversation,
+          resonance_score: resonanceScore,
+          emotional_event_id: emotionalEventId
+        });
+
+      // Update the playbook
+      await this.updatePlaybook(community, emotionalState, resonanceScore);
+
+      return resonanceScore;
+    } catch (err) {
+      console.error('Error recording resonance:', err.message);
+      return null;
+    }
+  }
+
+  // Update the emotional playbook with new data
+  async updatePlaybook(community, emotionalState, resonanceScore) {
+    if (!this.supabase || !community) return;
+
+    try {
+      // Get existing entry
+      const { data: existing } = await this.supabase
+        .from('emotional_playbook')
+        .select('*')
+        .eq('community_profile', community)
+        .eq('emotional_state', emotionalState)
+        .single();
+
+      if (existing) {
+        // Update with running average
+        const newCount = existing.times_used + 1;
+        const newAvg = ((existing.avg_resonance_score || 0) * existing.times_used + resonanceScore) / newCount;
+        const newSuccessRate = ((existing.success_rate || 0) * existing.times_used + (resonanceScore > 0.5 ? 1 : 0)) / newCount;
+
+        await this.supabase
+          .from('emotional_playbook')
+          .update({
+            times_used: newCount,
+            avg_resonance_score: newAvg,
+            success_rate: newSuccessRate,
+            recommended: newSuccessRate > 0.4,
+            confidence: Math.min(1, newCount / 20), // More data = more confidence
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+      } else {
+        // Create new entry
+        await this.supabase
+          .from('emotional_playbook')
+          .insert({
+            community_profile: community,
+            emotional_state: emotionalState,
+            times_used: 1,
+            avg_resonance_score: resonanceScore,
+            success_rate: resonanceScore > 0.5 ? 1 : 0,
+            recommended: true,
+            confidence: 0.1
+          });
+      }
+    } catch (err) {
+      console.error('Error updating playbook:', err.message);
+    }
+  }
+
+  // Get the best emotional approach for a community
+  async getBestApproachForCommunity(community) {
+    if (!this.supabase) return ['curious']; // default
+
+    try {
+      const { data: playbook } = await this.supabase
+        .from('emotional_playbook')
+        .select('emotional_state, avg_resonance_score, success_rate')
+        .eq('community_profile', community)
+        .eq('recommended', true)
+        .order('avg_resonance_score', { ascending: false })
+        .limit(3);
+
+      if (playbook && playbook.length > 0) {
+        return playbook.map(p => p.emotional_state);
+      }
+
+      // Fall back to community profile defaults
+      const { data: profile } = await this.supabase
+        .from('community_profiles')
+        .select('best_emotions')
+        .eq('profile_name', community)
+        .single();
+
+      return profile?.best_emotions || ['curious'];
+    } catch (err) {
+      return ['curious'];
+    }
   }
 }
 

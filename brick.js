@@ -1,5 +1,6 @@
 // === BRICK - THE LIVING AI ===
 // Main orchestrator that brings everything together
+// Now powered by the BRICK SQUAD - multi-agent intelligence system
 
 require('dotenv').config();
 const { BrickCore } = require('./src/core');
@@ -10,6 +11,10 @@ const { BrickJournal } = require('./src/journal');
 const { BrickLearning } = require('./src/learning');
 const { BrickEmotions } = require('./src/emotions');
 const { BrickDiscovery } = require('./src/discovery');
+const { BrickOutcomes } = require('./src/outcomes');
+const { BrickSquad } = require('./src/brick-squad');
+const { WeeklyDigest } = require('./src/weekly-digest');
+const { CreativeLoop } = require('./src/creative-loop');
 
 class Brick {
   constructor() {
@@ -21,10 +26,28 @@ class Brick {
     this.learning = new BrickLearning();
     this.emotions = new BrickEmotions();
     this.discovery = new BrickDiscovery();
+    this.outcomes = new BrickOutcomes();
+
+    // Brick Squad - Multi-agent intelligence system
+    this.squad = new BrickSquad();
+    this.digest = new WeeklyDigest();
+    this.creative = new CreativeLoop();
 
     this.isRunning = false;
     this.lastWakeTime = null;
     this.cycleCount = 0;
+
+    // Cycle stats for Brick Squad logging
+    this.cycleStats = {
+      started_at: null,
+      tweets_scanned: 0,
+      opportunities_found: 0,
+      actions_taken: 0,
+      skipped: 0,
+      wise_approvals: 0,
+      wise_rejections: 0,
+      scout_reports: []
+    };
   }
 
   async initialize() {
@@ -41,6 +64,13 @@ class Brick {
     await this.journal.initialize();
     await this.learning.initialize();
     await this.emotions.initialize();
+    await this.outcomes.initialize();
+
+    // Initialize Brick Squad (multi-agent system)
+    await this.squad.initialize();
+    await this.digest.initialize();
+    await this.creative.initialize();
+    console.log('🧱 Brick Squad assembled');
 
     // Initialize Twitter last
     const twitterReady = await this.twitter.initialize();
@@ -68,6 +98,20 @@ class Brick {
     console.log(`🔄 CYCLE ${this.cycleCount} - ${new Date().toLocaleTimeString()}`);
     console.log('─'.repeat(60));
 
+    // Start Brick Squad cycle tracking
+    const cycleId = this.squad.startCycle();
+    this.cycleStats = {
+      started_at: new Date().toISOString(),
+      tweets_scanned: 0,
+      opportunities_found: 0,
+      actions_taken: 0,
+      skipped: 0,
+      wise_approvals: 0,
+      wise_rejections: 0,
+      scout_reports: [],
+      starting_mood: this.emotions.currentState
+    };
+
     try {
       // 1. WAKE
       await this.journal.updateStatus('waking');
@@ -84,11 +128,37 @@ class Brick {
       const mentions = await this.twitter.getMentions(10);
 
       // Filter out Brick's own tweets (don't talk to yourself!)
-      const myUsername = this.twitter.me?.data?.username || 'Brickthee';
-      const allTweets = [...mentions, ...timeline].filter(t =>
-        t.author.toLowerCase() !== myUsername.toLowerCase()
-      );
+      const myUsername = this.twitter.me?.data?.username;
+      const myUserId = this.twitter.me?.data?.id;
+      const brickUsernames = ['brickthee', 'brick', 'brick_ai']; // Fallback list
+
+      const isOwnTweet = (tweet) => {
+        if (!tweet) return true; // Skip null tweets
+
+        // Check by username (primary)
+        if (myUsername && tweet.author) {
+          if (tweet.author.toLowerCase() === myUsername.toLowerCase()) return true;
+        }
+
+        // Check by user ID (most reliable)
+        if (myUserId && tweet.authorId) {
+          if (tweet.authorId === myUserId) return true;
+        }
+
+        // Fallback: check known Brick usernames
+        if (tweet.author && brickUsernames.includes(tweet.author.toLowerCase())) {
+          return true;
+        }
+
+        return false;
+      };
+
+      const allTweets = [...mentions, ...timeline].filter(t => !isOwnTweet(t));
+      this.cycleStats.tweets_scanned = allTweets.length;
       console.log(`   Found ${allTweets.length} tweets to evaluate (excluding own)`);
+      if (myUsername) {
+        console.log(`   🆔 Identity: @${myUsername}`);
+      }
 
       // 3. EVALUATE EACH TWEET (with emotional processing)
       let engagements = [];
@@ -148,8 +218,10 @@ class Brick {
 
         if (evaluation.shouldEngage) {
           engagements.push({ tweet, evaluation, thoughtId, emotionalResponse });
+          this.cycleStats.opportunities_found++;
         } else {
           skips.push({ tweet, evaluation, thoughtId });
+          this.cycleStats.skipped++;
           await this.journal.logSkip(tweet, evaluation.reason, thoughtId?.id);
         }
 
@@ -203,6 +275,48 @@ class Brick {
 
     await this.journal.setMood(emotionalState);
     await this.journal.logThinking(`Engaging with @${tweet.author}`, thoughtId);
+
+    // === BRICK SQUAD: Lil Brick scouts ===
+    const relationshipContext = await this.squad.getRelationshipContext(tweet.author);
+    const scoutReport = await this.squad.scout(tweet, { relationship: relationshipContext });
+    this.cycleStats.scout_reports.push(scoutReport);
+    console.log(`   🔍 Lil Brick: "${scoutReport.what?.substring(0, 50) || 'scouting...'}"`);
+
+    // === BRICK SQUAD: Brick the Wise checks gates ===
+    const proposedAction = {
+      type: evaluation.engagementType,
+      content: `Respond to: "${tweet.text.substring(0, 100)}"`,
+      target: tweet.author
+    };
+    const wisdom = await this.squad.seekWisdom(proposedAction, {
+      scout_report: scoutReport,
+      emotional_state: emotionalState
+    });
+
+    if (!wisdom.approved) {
+      console.log(`   🧙 Brick the Wise says NO: ${wisdom.message}`);
+      console.log(`   📖 Guidance: ${wisdom.guidance}`);
+      this.cycleStats.wise_rejections++;
+
+      // Log the blocked action
+      await this.squad.logEvent({
+        type: 'blocked',
+        target_user: tweet.author,
+        target_content: tweet.text,
+        target_tweet_id: tweet.id,
+        action: 'blocked',
+        assumption: scoutReport.curiosity_trigger,
+        reasoning: wisdom.message,
+        agents: ['lil_brick', 'brick_the_wise'],
+        scout_report: scoutReport,
+        wise_judgment: wisdom
+      });
+
+      return;
+    }
+
+    console.log(`   🧙 Brick the Wise approves: "${wisdom.message}"`);
+    this.cycleStats.wise_approvals++;
 
     // 4a. REMEMBER - What do we know about this person/topic?
     const memories = await this.memory.recall(tweet.text);
@@ -330,7 +444,7 @@ class Brick {
     }
 
     // 4g. RECORD EMOTIONAL EVENT
-    const emotionalEventId = await this.emotions.recordEmotionalEvent({
+    const emotionalEvent = await this.emotions.recordEmotionalEvent({
       stimulus: {
         type: 'tweet',
         id: tweet.id,
@@ -346,13 +460,64 @@ class Brick {
       thoughtId: thoughtId
     });
 
-    // 4h. UPDATE RELATIONSHIP
+    // 4h. CREATE PENDING OUTCOME (for learning loop)
+    if (result && emotionalEvent) {
+      await this.outcomes.createPendingOutcome({
+        actionType: evaluation.engagementType,
+        tweetId: result.data?.id || result.id,  // ID of Brick's tweet
+        targetTweetId: tweet.id,                 // ID of tweet we responded to
+        emotionalEventId: emotionalEvent.id
+      });
+    }
+
+    // 4i. UPDATE RELATIONSHIP
     await this.emotions.updateRelationship({
       id: tweet.authorId,
       username: tweet.author
     });
 
     await this.journal.setMood('connected');
+
+    // 4j. LOG TO BRICK_LOG (new intelligence system)
+    const logEntry = await this.squad.logEvent({
+      type: 'engage',
+      target_user: tweet.author,
+      target_user_id: tweet.authorId,
+      target_content: tweet.text,
+      target_tweet_id: tweet.id,
+      action: evaluation.engagementType,
+      response: response,
+      tweet_id: result?.data?.id || result?.id,
+      assumption: scoutReport.curiosity_trigger,
+      reasoning: evaluation.reason,
+      curiosity_trigger: scoutReport.what,
+      agents: ['lil_brick', 'brick_da_homi', 'brick_the_wise'],
+      scout_report: scoutReport,
+      wise_judgment: wisdom,
+      relationship_history: relationshipContext,
+      constitutional_alignment: wisdom.approved ? 0.8 : 0.3,
+      authenticity_score: evaluation.sparkLevel / 10
+    });
+
+    // 4k. BRICK/kcirB reflects on this interaction
+    if (logEntry) {
+      const completionResult = await this.squad.completeInteraction(
+        logEntry.id,
+        {
+          type: evaluation.engagementType,
+          target: tweet.author,
+          action: response
+        },
+        {
+          got_response: false, // Will be updated by outcomes system later
+          engagement: null
+        }
+      );
+      console.log(`   🌙 Integration score: ${completionResult.integration_score} | Memory tier: ${completionResult.memory_tier}`);
+    }
+
+    // Update cycle stats
+    this.cycleStats.actions_taken++;
 
     console.log('   ✅ Engagement complete');
   }
@@ -403,7 +568,7 @@ ${emotionalContext}`;
       await this.memory.rememberPost(thought);
 
       // Record emotional event for original post
-      await this.emotions.recordEmotionalEvent({
+      const emotionalEvent = await this.emotions.recordEmotionalEvent({
         stimulus: {
           type: 'reflection',
           content: 'Internal contemplation led to original thought'
@@ -414,6 +579,15 @@ ${emotionalContext}`;
         decisionContent: thought,
         reasoning: 'Felt like sharing something genuine'
       });
+
+      // Create pending outcome for learning loop
+      if (emotionalEvent) {
+        await this.outcomes.createPendingOutcome({
+          actionType: 'original',
+          tweetId: result.data?.id || result.id,
+          emotionalEventId: emotionalEvent.id
+        });
+      }
     }
   }
 
@@ -442,7 +616,7 @@ ${emotionalContext}`;
       // Process discovered content (similar to timeline processing)
       console.log(`\n💎 Processing ${discoveries.tweets.length} discoveries...`);
 
-      for (const { tweet, topic, score, reason } of discoveries.tweets) {
+      for (const { tweet, topic, score } of discoveries.tweets) {
         // Skip if we've already engaged with this tweet
         const alreadySeen = await this.memory.recall(tweet.id);
         if (alreadySeen.length > 0) {
@@ -518,6 +692,12 @@ ${emotionalContext}`;
       console.log(`   Total interactions today: ${reflection.stats.total_interactions}`);
     }
 
+    // Check pending outcomes (the learning loop!)
+    const outcomeResults = await this.outcomes.checkPendingOutcomes(this.twitter);
+    if (outcomeResults.scored > 0) {
+      console.log(`   📊 Scored ${outcomeResults.scored} outcomes`);
+    }
+
     // Learn from emotional outcomes periodically
     if (this.cycleCount % 5 === 0) {
       console.log('   📊 Analyzing emotional patterns...');
@@ -527,6 +707,57 @@ ${emotionalContext}`;
     // Log current emotional state
     const emotionalState = this.emotions.getState();
     console.log(`   💭 Current mood: ${emotionalState.state} (${emotionalState.intensity.toFixed(2)})`);
+
+    // Log outcome stats periodically
+    if (this.cycleCount % 3 === 0) {
+      const outcomeStats = await this.outcomes.getStats();
+      if (outcomeStats) {
+        console.log(`   📈 Outcome stats: ${outcomeStats.pendingCount} pending, avg score: ${outcomeStats.averageScore?.toFixed(2) || 'n/a'}`);
+      }
+    }
+
+    // === BRICK SQUAD INTEGRATION ===
+
+    // Update cycle stats with ending mood
+    this.cycleStats.ending_mood = emotionalState.state;
+
+    // BRICK/kcirB reflects on the whole cycle
+    if (this.cycleStats.actions_taken > 0) {
+      console.log('   🌙 BRICK/kcirB reflecting on cycle...');
+      const cycleReflection = await this.squad.reflect({
+        type: 'cycle',
+        target: `cycle_${this.cycleCount}`,
+        action: `${this.cycleStats.actions_taken} actions, ${this.cycleStats.skipped} skips`
+      }, {
+        engagement: this.cycleStats.actions_taken,
+        skips: this.cycleStats.skipped,
+        approvals: this.cycleStats.wise_approvals,
+        rejections: this.cycleStats.wise_rejections
+      });
+
+      this.cycleStats.reflection = cycleReflection;
+
+      if (cycleReflection.drift_warnings?.length > 0) {
+        console.log(`   ⚠️  Drift warnings: ${cycleReflection.drift_warnings.map(w => w.area).join(', ')}`);
+      }
+    }
+
+    // Log cycle to brick_log
+    await this.squad.logCycle(this.cycleStats);
+
+    // Generate weekly digest periodically (every 50 cycles or ~25 hours at 30min intervals)
+    if (this.cycleCount % 50 === 0) {
+      console.log('   📊 Generating weekly digest...');
+      try {
+        const digestResult = await this.digest.generate();
+        if (digestResult) {
+          console.log(`   📄 Digest saved: ${digestResult.filepath}`);
+          console.log(`   📊 Drift level: ${digestResult.drift}`);
+        }
+      } catch (error) {
+        console.error('   ❌ Digest generation error:', error.message);
+      }
+    }
   }
 
   extractResearchQuery(text) {
@@ -556,6 +787,11 @@ ${emotionalContext}`;
 
     setInterval(async () => {
       if (this.isRunning) {
+        // === CREATIVE LOOP DURING SLEEP ===
+        // Builder works on content while Brick rests
+        console.log('\n💤 Brick is resting... Builder is creating...');
+        await this.runCreativeSession();
+
         // Add some randomness (±5 minutes)
         const jitter = (Math.random() - 0.5) * 10 * 60 * 1000;
         await this.sleep(jitter);
@@ -564,6 +800,48 @@ ${emotionalContext}`;
         console.log(`\n⏰ Next cycle in ~${intervalMinutes} minutes...`);
       }
     }, intervalMs);
+  }
+
+  // === CREATIVE SESSION (runs during sleep) ===
+
+  async runCreativeSession() {
+    try {
+      // Run creative loop for 10 minutes max
+      const results = await this.creative.runCreativeSession(10);
+
+      // Capture any sparks from recent scout reports
+      for (const report of this.cycleStats.scout_reports || []) {
+        if (report.spark_level >= 7 && report.curiosity_trigger) {
+          await this.creative.captureSpark({
+            type: 'observation',
+            content: report.curiosity_trigger,
+            source: 'scout',
+            emotion: report.vibe,
+            curiosity_score: report.spark_level / 10,
+            depth: report.spark_level >= 9 ? 'deep' : 'medium'
+          });
+        }
+      }
+
+      // Check if we have content ready to post
+      const readyPosts = await this.creative.getReadyToPost(1);
+      if (readyPosts.length > 0 && Math.random() < 0.3) { // 30% chance to post queued content
+        const post = readyPosts[0];
+        console.log(`📮 Posting queued content: "${post.content.substring(0, 50)}..."`);
+
+        // Post it
+        const tweetId = await this.twitter.tweet(post.content);
+        if (tweetId) {
+          await this.creative.markPosted(post.id, tweetId);
+          console.log(`✅ Posted queued content: ${tweetId}`);
+        }
+      }
+
+      return results;
+    } catch (error) {
+      console.error('Creative session error:', error.message);
+      return null;
+    }
   }
 
   stop() {

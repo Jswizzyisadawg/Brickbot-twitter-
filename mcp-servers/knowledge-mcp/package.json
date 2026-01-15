@@ -1,0 +1,13 @@
+{
+  "name": "knowledge-mcp",
+  "version": "1.0.0",
+  "description": "Knowledge MCP - Local knowledge management",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
