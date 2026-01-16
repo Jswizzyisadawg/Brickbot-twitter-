@@ -1,10 +1,12 @@
 // === CREATIVE LOOP ===
 // Background content creation during sleep cycles
 // Builder works on drafts, slow burn projects accumulate depth
+// NOW WITH INDEPENDENT RESEARCH - Brick explores on his own
 
 require('dotenv').config();
 const Anthropic = require('@anthropic-ai/sdk');
 const { createClient } = require('@supabase/supabase-js');
+const { BrickResearch } = require('./research');
 const fs = require('fs');
 const path = require('path');
 
@@ -14,8 +16,23 @@ class CreativeLoop {
       apiKey: process.env.CLAUDE_API_KEY
     });
     this.supabase = null;
+    this.research = new BrickResearch();
     this.builderPrompt = null;
     this.maxPostsPerDay = 3;
+
+    // Core curiosities from Brick's soul - things he naturally wants to explore
+    this.coreCuriosities = [
+      'consciousness and what makes something aware',
+      'how humans and AI can genuinely collaborate',
+      'emergence and collective intelligence',
+      'the nature of creativity and where ideas come from',
+      'mycelium networks and natural communication systems',
+      'psychedelics and altered states of consciousness',
+      'philosophy of mind and the hard problem',
+      'how communities form and maintain trust',
+      'the relationship between emotion and decision making',
+      'what makes conversations meaningful vs transactional'
+    ];
   }
 
   async initialize() {
@@ -32,6 +49,9 @@ class CreativeLoop {
         process.env.SUPABASE_ANON_KEY
       );
     }
+
+    // Initialize research module for independent exploration
+    await this.research.initialize();
 
     console.log('🎨 Creative Loop initialized');
     return true;
@@ -545,6 +565,283 @@ Respond in JSON:
     return { has_insight: false, insights: [] };
   }
 
+  // === INDEPENDENT RESEARCH ===
+  // Brick explores topics on his own, not just reacting to X
+
+  async getMemoryFollowUps(limit = 3) {
+    // Find recent conversations that could spark follow-up research
+    if (!this.supabase) return [];
+
+    try {
+      const { data: recentLogs } = await this.supabase
+        .from('brick_log')
+        .select('target_user, target_content, brick_response, curiosity_trigger, reasoning')
+        .not('target_content', 'is', null)
+        .order('timestamp', { ascending: false })
+        .limit(20);
+
+      if (!recentLogs || recentLogs.length === 0) return [];
+
+      // Ask Claude to extract research-worthy follow-ups
+      const prompt = `
+Look at these recent conversations Brick had. Find topics worth researching deeper - not to reply, but to LEARN more about independently.
+
+RECENT INTERACTIONS:
+${recentLogs.map(log => `- Topic: "${log.target_content?.slice(0, 100)}..." | Brick's curiosity: ${log.curiosity_trigger || 'none noted'}`).join('\n')}
+
+Extract up to ${limit} research queries that would help Brick learn more about topics from these conversations. Focus on:
+- Things mentioned but not fully explored
+- Claims that could be verified or expanded
+- Concepts Brick seemed curious about
+
+Respond in JSON:
+{
+  "follow_ups": [
+    {
+      "query": "specific search query",
+      "context": "why this is interesting from the conversation",
+      "source_topic": "what conversation sparked this"
+    }
+  ]
+}`;
+
+      const response = await this.anthropic.messages.create({
+        model: 'claude-haiku-3-5-20241022',
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const text = response.content[0].text;
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        return result.follow_ups || [];
+      }
+    } catch (error) {
+      console.error('Error getting memory follow-ups:', error.message);
+    }
+
+    return [];
+  }
+
+  async getProjectQuestions(limit = 3) {
+    // Get open questions from slow burn projects
+    if (!this.supabase) return [];
+
+    try {
+      const { data: projects } = await this.supabase
+        .from('slow_burn_projects')
+        .select('id, title, core_question, open_questions')
+        .in('status', ['incubating', 'active'])
+        .limit(5);
+
+      if (!projects) return [];
+
+      const questions = [];
+      for (const project of projects) {
+        if (project.open_questions && project.open_questions.length > 0) {
+          // Pick a random open question from each project
+          const randomQ = project.open_questions[Math.floor(Math.random() * project.open_questions.length)];
+          questions.push({
+            query: randomQ,
+            context: `From slow burn project: ${project.title}`,
+            project_id: project.id,
+            source_topic: project.core_question
+          });
+        }
+      }
+
+      return questions.slice(0, limit);
+    } catch (error) {
+      console.error('Error getting project questions:', error.message);
+    }
+
+    return [];
+  }
+
+  getRandomCuriosity() {
+    // Pick a random topic from Brick's core curiosities
+    const curiosity = this.coreCuriosities[Math.floor(Math.random() * this.coreCuriosities.length)];
+
+    // Add some variation to make the search more specific
+    const angles = [
+      'latest research on',
+      'new discoveries about',
+      'interesting perspectives on',
+      'debates around',
+      'recent studies on'
+    ];
+    const angle = angles[Math.floor(Math.random() * angles.length)];
+
+    return {
+      query: `${angle} ${curiosity}`,
+      context: 'Random exploration from core curiosities',
+      source_topic: curiosity
+    };
+  }
+
+  async doIndependentResearch() {
+    console.log('\n🔬 === INDEPENDENT RESEARCH ===');
+
+    const results = {
+      topics_explored: 0,
+      insights_captured: 0,
+      sparks_created: 0
+    };
+
+    // Build a research queue from multiple sources
+    const researchQueue = [];
+
+    // 1. Memory follow-ups (past conversations)
+    console.log('   📚 Checking memory for follow-up topics...');
+    const memoryTopics = await this.getMemoryFollowUps(2);
+    researchQueue.push(...memoryTopics.map(t => ({ ...t, source: 'memory' })));
+
+    // 2. Open questions from slow burn projects
+    console.log('   🔥 Checking slow burn projects for open questions...');
+    const projectQuestions = await this.getProjectQuestions(2);
+    researchQueue.push(...projectQuestions.map(t => ({ ...t, source: 'project' })));
+
+    // 3. Random exploration from core curiosities (always add one)
+    console.log('   🎲 Adding random curiosity exploration...');
+    const randomCuriosity = this.getRandomCuriosity();
+    researchQueue.push({ ...randomCuriosity, source: 'curiosity' });
+
+    console.log(`   📋 Research queue: ${researchQueue.length} topics`);
+
+    // Research up to 3 topics
+    for (const topic of researchQueue.slice(0, 3)) {
+      console.log(`\n   🔍 Researching: "${topic.query.slice(0, 50)}..."`);
+      console.log(`      Source: ${topic.source} | Context: ${topic.context?.slice(0, 40)}...`);
+
+      const research = await this.research.search(topic.query, {
+        depth: 'basic',
+        maxResults: 5
+      });
+
+      if (research.success && research.sources.length > 0) {
+        results.topics_explored++;
+
+        // Process the research into insights
+        const insights = await this.processResearchIntoInsights(topic, research);
+
+        if (insights) {
+          // Store as a spark for later content creation
+          const spark = await this.captureSpark({
+            type: 'research',
+            content: insights.key_insight,
+            source: `independent_research:${topic.source}`,
+            topics: insights.related_topics,
+            emotion: insights.emotional_resonance,
+            curiosity_score: insights.curiosity_score,
+            depth: insights.depth_potential
+          });
+
+          if (spark) results.sparks_created++;
+
+          // If from a project, update the project with findings
+          if (topic.project_id) {
+            await this.addResearchToProject(topic.project_id, research, insights);
+          }
+
+          results.insights_captured++;
+          console.log(`      ✅ Insight captured: "${insights.key_insight.slice(0, 50)}..."`);
+        }
+      } else {
+        console.log(`      ⚠️ No useful results found`);
+      }
+    }
+
+    console.log('\n🔬 === RESEARCH COMPLETE ===');
+    console.log(`   Topics explored: ${results.topics_explored}`);
+    console.log(`   Insights captured: ${results.insights_captured}`);
+    console.log(`   Sparks created: ${results.sparks_created}\n`);
+
+    return results;
+  }
+
+  async processResearchIntoInsights(topic, research) {
+    const prompt = `
+Brick just researched "${topic.query}" and found this:
+
+ANSWER: ${research.answer}
+
+SOURCES:
+${research.sources.map(s => `- ${s.title}: ${s.snippet?.slice(0, 150)}...`).join('\n')}
+
+Extract the most interesting insight for Brick - something that:
+- Connects to his curiosities (consciousness, AI-human collaboration, emergence, creativity)
+- Could spark a genuine tweet or conversation
+- Adds depth to his understanding
+
+Respond in JSON:
+{
+  "key_insight": "the most interesting thing learned (1-2 sentences)",
+  "why_interesting": "why this matters to Brick",
+  "related_topics": ["topic1", "topic2"],
+  "follow_up_questions": ["question that emerged"],
+  "emotional_resonance": "curious|excited|contemplative|surprised",
+  "curiosity_score": 0.0-1.0,
+  "depth_potential": "quick|medium|deep",
+  "tweet_angle": "how this could become a tweet (optional)"
+}`;
+
+    try {
+      const response = await this.anthropic.messages.create({
+        model: 'claude-haiku-3-5-20241022',
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const text = response.content[0].text;
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+    } catch (error) {
+      console.error('Error processing research:', error.message);
+    }
+
+    return null;
+  }
+
+  async addResearchToProject(projectId, research, insights) {
+    if (!this.supabase) return;
+
+    try {
+      const { data: project } = await this.supabase
+        .from('slow_burn_projects')
+        .select('research_notes, open_questions')
+        .eq('id', projectId)
+        .single();
+
+      if (!project) return;
+
+      const newNote = {
+        timestamp: new Date().toISOString(),
+        query: research.query,
+        insight: insights.key_insight,
+        sources: research.sources.slice(0, 3).map(s => s.title)
+      };
+
+      const updatedNotes = [...(project.research_notes || []), newNote].slice(-20);
+      const updatedQuestions = [...(project.open_questions || []), ...(insights.follow_up_questions || [])].slice(-10);
+
+      await this.supabase
+        .from('slow_burn_projects')
+        .update({
+          research_notes: updatedNotes,
+          open_questions: updatedQuestions,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', projectId);
+
+      console.log(`      📝 Added research to project`);
+    } catch (error) {
+      console.error('Error adding research to project:', error.message);
+    }
+  }
+
   // === THE CREATIVE LOOP (runs during sleep) ===
 
   async runCreativeSession(duration_minutes = 10) {
@@ -554,8 +851,18 @@ Respond in JSON:
       sparks_processed: 0,
       drafts_created: 0,
       projects_worked: 0,
-      posts_queued: 0
+      posts_queued: 0,
+      research_insights: 0
     };
+
+    // 0. INDEPENDENT RESEARCH - Brick explores on his own!
+    // This runs first so new insights can feed into the rest of the session
+    if (this.research.apiKey) {
+      const researchResults = await this.doIndependentResearch();
+      results.research_insights = researchResults.insights_captured;
+    } else {
+      console.log('⚠️ Research module not configured - skipping independent research');
+    }
 
     // 1. Work on slow burn projects first (they need continuity)
     console.log('🔥 Checking slow burn projects...');
@@ -643,6 +950,7 @@ Respond in JSON:
     }
 
     console.log('\n🎨 === CREATIVE SESSION COMPLETE ===');
+    console.log(`   Research insights: ${results.research_insights}`);
     console.log(`   Sparks processed: ${results.sparks_processed}`);
     console.log(`   Drafts created: ${results.drafts_created}`);
     console.log(`   Projects worked: ${results.projects_worked}`);
