@@ -548,7 +548,7 @@ Respond in JSON:
 
     try {
       const response = await this.anthropic.messages.create({
-        model: 'claude-haiku-3-5-20241022',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 512,
         messages: [{ role: 'user', content: prompt }]
       });
@@ -606,7 +606,7 @@ Respond in JSON:
 }`;
 
       const response = await this.anthropic.messages.create({
-        model: 'claude-haiku-3-5-20241022',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 512,
         messages: [{ role: 'user', content: prompt }]
       });
@@ -788,7 +788,7 @@ Respond in JSON:
 
     try {
       const response = await this.anthropic.messages.create({
-        model: 'claude-haiku-3-5-20241022',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 512,
         messages: [{ role: 'user', content: prompt }]
       });
